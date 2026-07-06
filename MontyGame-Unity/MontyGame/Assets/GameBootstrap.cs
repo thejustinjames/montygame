@@ -1,43 +1,40 @@
 using UnityEngine;
 
 /// <summary>
-/// Builds the ENTIRE test scene in code when you press Play.
-/// No manual Unity editor setup needed — just hit Play.
+/// Builds the ENTIRE 10x10 Snakes-&-Ladders board in code when you press Play.
+/// No manual Unity editor setup needed. Runs automatically via
+/// [RuntimeInitializeOnLoadMethod] (no GameObject required).
 ///
-/// Runs automatically via [RuntimeInitializeOnLoadMethod] — this static method
-/// is called by Unity at runtime with NO GameObject required. It:
-///   1. Cleans up any leftover objects from manual attempts
-///   2. Creates a camera
-///   3. Creates the player (yellow square) with physics + controller
-///   4. Creates the ground
-///   5. Creates 5 numbered tiles
-///
-/// You can safely have an empty scene — this builds everything.
+/// Builds: top-down camera, 100 numbered squares, ladder/snake connector
+/// lines, collectible stars, the Dino token, and the game manager.
 /// </summary>
 public static class GameBootstrap
 {
+    static Material lineMat;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     public static void BuildScene()
     {
-        Debug.Log("🔧 GameBootstrap: Building scene from code...");
+        Debug.Log("🔧 GameBootstrap: Building 10x10 board...");
 
         CleanupOldObjects();
         CreateCamera();
-        CreateGround();
-        CreateTiles();
-        CreatePlayer();
+        CreateSquares();
+        CreateConnectors();
+        CreateCollectibles();
+        CreateToken();
         CreateGameManager();
 
-        Debug.Log("✅ GameBootstrap: Scene built! Press the ROLL button to play.");
+        Debug.Log("✅ Board built! Press ROLL to climb to 100 and beat the boss.");
     }
 
-    // ---- Sprite helper: makes a solid-colour square sprite in code ----
+    // ---- helpers ----
     static Sprite MakeSquareSprite(Color color)
     {
         var tex = new Texture2D(4, 4);
-        var pixels = new Color[16];
-        for (int i = 0; i < pixels.Length; i++) pixels[i] = color;
-        tex.SetPixels(pixels);
+        var px = new Color[16];
+        for (int i = 0; i < px.Length; i++) px[i] = color;
+        tex.SetPixels(px);
         tex.filterMode = FilterMode.Point;
         tex.Apply();
         return Sprite.Create(tex, new Rect(0, 0, 4, 4), new Vector2(0.5f, 0.5f), 4);
@@ -45,14 +42,13 @@ public static class GameBootstrap
 
     static void CleanupOldObjects()
     {
-        // Find everything once, then destroy — Destroy() is deferred, so we must
-        // NOT re-Find in a loop (that would hang). Collect first, delete after.
         var all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
         foreach (var go in all)
         {
             string n = go.name;
-            if (n == "Player" || n == "Ground" || n == "_Setup" ||
-                n.StartsWith("Tile_") || n.StartsWith("Label_"))
+            if (n == "Player" || n == "Ground" || n == "_Setup" || n == "_GameManager" ||
+                n == "Token" || n.StartsWith("Tile_") || n.StartsWith("Label_") ||
+                n.StartsWith("Sq_") || n.StartsWith("Link_") || n.StartsWith("Star_"))
             {
                 Object.Destroy(go);
             }
@@ -70,94 +66,135 @@ public static class GameBootstrap
         }
         cam.transform.position = new Vector3(0, 0, -10);
         cam.orthographic = true;
-        cam.orthographicSize = 6f;
-        cam.backgroundColor = new Color(0.53f, 0.81f, 0.92f); // sky blue
-        Debug.Log("✓ Camera ready (orthographic, sky-blue)");
+        cam.orthographicSize = 6.2f; // fits the 10-unit board + margin
+        cam.backgroundColor = new Color(0.10f, 0.13f, 0.20f); // deep space
+        Debug.Log("✓ Camera framed on board");
     }
 
-    static void CreateGround()
+    static void CreateSquares()
     {
-        var ground = new GameObject("Ground");
-        ground.tag = "Ground";
-        ground.transform.position = new Vector3(0, -3.5f, 0);
-        ground.transform.localScale = new Vector3(30, 1, 1);
-
-        var sr = ground.AddComponent<SpriteRenderer>();
-        sr.sprite = MakeSquareSprite(new Color(0.35f, 0.25f, 0.15f)); // brown earth
-        sr.sortingOrder = 0;
-
-        ground.AddComponent<BoxCollider2D>();
-        Debug.Log("✓ Ground created");
-    }
-
-    static void CreateTiles()
-    {
-        // Colours for the 5 test tiles
-        Color[] colors =
+        for (int n = 1; n <= BoardLayout.Squares; n++)
         {
-            new Color(0.30f, 0.69f, 0.31f), // green   - normal
-            new Color(0.30f, 0.69f, 0.31f), // green   - normal
-            new Color(0.61f, 0.35f, 0.71f), // purple  - portal
-            new Color(0.10f, 0.55f, 0.72f), // blue    - whirlpool
-            new Color(1.00f, 0.76f, 0.03f), // gold    - goal
-        };
+            Vector3 pos = BoardLayout.SquareToWorld(n);
 
-        for (int i = 1; i <= 5; i++)
-        {
-            float x = -6f + (i - 1) * 3f; // -6, -3, 0, 3, 6
+            var sq = new GameObject($"Sq_{n}");
+            sq.transform.position = pos;
+            sq.transform.localScale = new Vector3(BoardLayout.Cell * 0.94f, BoardLayout.Cell * 0.94f, 1);
 
-            var tile = new GameObject($"Tile_{i}");
-            tile.tag = "Ground"; // player can stand on tiles
-            tile.transform.position = new Vector3(x, -2f, 0);
-            tile.transform.localScale = new Vector3(2f, 0.6f, 1);
+            var sr = sq.AddComponent<SpriteRenderer>();
+            sr.sprite = MakeSquareSprite(SquareColor(n));
+            sr.sortingOrder = 0;
 
-            var sr = tile.AddComponent<SpriteRenderer>();
-            sr.sprite = MakeSquareSprite(colors[i - 1]);
-            sr.sortingOrder = 1;
-
-            tile.AddComponent<BoxCollider2D>();
-
-            // Number label above the tile
-            var label = new GameObject($"Label_{i}");
-            label.transform.position = new Vector3(x, -1.2f, -1);
+            // number label
+            var label = new GameObject($"Label_{n}");
+            label.transform.position = pos + new Vector3(-0.34f, 0.30f, -1);
             var tm = label.AddComponent<TextMesh>();
-            tm.text = i.ToString();
-            tm.characterSize = 0.2f;
-            tm.fontSize = 60;
-            tm.anchor = TextAnchor.MiddleCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = Color.white;
+            tm.text = n.ToString();
+            tm.characterSize = 0.07f;
+            tm.fontSize = 48;
+            tm.color = new Color(1f, 1f, 1f, 0.75f);
         }
-        Debug.Log("✓ 5 tiles created (green, green, purple, blue, gold)");
+        Debug.Log("✓ 100 squares created");
     }
 
-    static void CreatePlayer()
+    static Color SquareColor(int n)
     {
-        var player = new GameObject("Player");
-        player.tag = "Player";
-        player.transform.position = new Vector3(-6f, 1f, 0);
-        player.transform.localScale = new Vector3(0.8f, 0.8f, 1);
+        if (n == BoardLayout.Boss) return new Color(0.80f, 0.15f, 0.15f);          // boss red
+        if (BoardLayout.Ladders.ContainsKey(n)) return new Color(0.20f, 0.55f, 0.30f); // ladder base green
+        if (BoardLayout.Snakes.ContainsKey(n)) return new Color(0.55f, 0.25f, 0.55f);  // snake head purple
+        // checkerboard of two calm blues
+        int row = (n - 1) / BoardLayout.Grid;
+        int col = (n - 1) % BoardLayout.Grid;
+        bool even = (row + col) % 2 == 0;
+        return even ? new Color(0.17f, 0.24f, 0.34f) : new Color(0.22f, 0.30f, 0.42f);
+    }
 
-        var sr = player.AddComponent<SpriteRenderer>();
-        sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.2f)); // Dino yellow
-        sr.sortingOrder = 2;
+    static Material LineMaterial()
+    {
+        if (lineMat == null)
+        {
+            var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+            lineMat = new Material(shader);
+        }
+        return lineMat;
+    }
 
-        var rb = player.AddComponent<Rigidbody2D>();
-        rb.gravityScale = 2f;
-        rb.freezeRotation = true;
-        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+    static void CreateConnectors()
+    {
+        foreach (var kv in BoardLayout.Ladders)
+            DrawLink($"Link_L{kv.Key}", kv.Key, kv.Value, new Color(0.35f, 0.85f, 0.45f)); // green up
+        foreach (var kv in BoardLayout.Snakes)
+            DrawLink($"Link_S{kv.Key}", kv.Key, kv.Value, new Color(0.85f, 0.45f, 0.85f)); // purple down
+        Debug.Log("✓ Ladder/snake links drawn");
+    }
 
-        player.AddComponent<BoxCollider2D>();
-        player.AddComponent<PlayerController>();
+    static void DrawLink(string name, int from, int to, Color color)
+    {
+        var obj = new GameObject(name);
+        var lr = obj.AddComponent<LineRenderer>();
+        lr.material = LineMaterial();
+        lr.startColor = lr.endColor = color;
+        lr.startWidth = lr.endWidth = 0.12f;
+        lr.numCapVertices = 4;
+        lr.sortingOrder = 1;
+        lr.positionCount = 2;
+        lr.SetPosition(0, BoardLayout.SquareToWorld(from) + new Vector3(0, 0, -0.5f));
+        lr.SetPosition(1, BoardLayout.SquareToWorld(to) + new Vector3(0, 0, -0.5f));
+    }
 
-        Debug.Log("✓ Player created (yellow square) at tile 1");
+    static void CreateCollectibles()
+    {
+        foreach (int n in BoardLayout.Collectibles)
+        {
+            var star = new GameObject($"Star_{n}");
+            star.transform.position = BoardLayout.SquareToWorld(n) + new Vector3(0.25f, -0.25f, -1);
+            star.transform.localScale = new Vector3(0.3f, 0.3f, 1);
+            var sr = star.AddComponent<SpriteRenderer>();
+            sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.1f)); // gold star (square placeholder)
+            sr.sortingOrder = 2;
+        }
+        Debug.Log("✓ Collectibles placed");
+    }
+
+    static void CreateToken()
+    {
+        var token = new GameObject("Token");
+        token.tag = "Player";
+        token.transform.position = BoardLayout.SquareToWorld(1) + new Vector3(0, 0, -2);
+
+        var sr = token.AddComponent<SpriteRenderer>();
+        sr.sprite = LoadCharacterSprite("Dino");
+        sr.sortingOrder = 5;
+
+        // scale token to about one square
+        float target = BoardLayout.Cell * 0.8f;
+        if (sr.sprite != null)
+        {
+            float w = sr.sprite.bounds.size.x;
+            if (w > 0.001f) token.transform.localScale = Vector3.one * (target / w);
+        }
+        else
+        {
+            sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.2f));
+            token.transform.localScale = Vector3.one * target;
+        }
+        Debug.Log("✓ Dino token on square 1");
+    }
+
+    static Sprite LoadCharacterSprite(string name)
+    {
+        // Load the kid's drawing (PNG in Resources) and make a sprite in code,
+        // so it works whether the PNG imported as Texture or Sprite.
+        var tex = Resources.Load<Texture2D>(name);
+        if (tex == null) return null;
+        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                             new Vector2(0.5f, 0.5f), tex.width);
     }
 
     static void CreateGameManager()
     {
-        // Drives the turn-based board loop (roll -> hop -> tile effect -> win)
         var gm = new GameObject("_GameManager");
         gm.AddComponent<GameController>();
-        Debug.Log("✓ GameManager created (ROLL button active)");
+        Debug.Log("✓ GameManager ready (ROLL to play)");
     }
 }
