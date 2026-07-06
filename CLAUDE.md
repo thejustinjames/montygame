@@ -2,9 +2,10 @@
 
 **MontyGame** is a **game development project** for ages 5–7: a platformer-board hybrid blending Snakes & Ladders mechanics with Donkey Kong platforming, set in a colorful space-dinosaur adventure.
 
-**Status:** Planning phase complete ✓ → Development phase (Sprint 1 starting)  
-**Tech Stack:** Unity Personal Edition  
-**Target:** MVP (World 1 complete) in 8 weeks
+**Status:** Planning ✓ → **World 1 game logic BUILT & TESTED** ✓ (Code Easy AutoCode, spec #61, 2026-07-06) → Unity shell next  
+**Tech Stack:** Unity Personal Edition (presentation shell) over **MontyGame.Core** — an engine-agnostic .NET 8 class library (see `Docs/adr/0001-engine-agnostic-core-library.md`)  
+**Target:** MVP (World 1 complete) in 8 weeks  
+**Proof it works:** `dotnet test` → 78/78 green · `dotnet run --project src/MontyGame.Cli -- --auto` → full seeded playthrough to victory
 
 ---
 
@@ -12,10 +13,15 @@
 
 | Folder | Purpose |
 | --- | --- |
-| `Docs/` | Game design, world layouts, narrative beats. See `GAME_DESIGN_IDEATION.md` and `WORLD_1_LAYOUT.md`. |
+| `MontyGame.sln` | Solution: core library + tests + CLI simulator (built by AutoCode spec #61) |
+| `src/MontyGame.Core/` | **The game rules, built & tested** — Board, Tile, Dice, IRandom, MovementCards, TileEffects, GameEngine. Pure C#, **zero UnityEngine references** (hard constraint). |
+| `src/MontyGame.Cli/` | Console playthrough simulator — `dotnet run --project src/MontyGame.Cli -- --auto` plays a full seeded World 1 game |
+| `tests/MontyGame.Core.Tests/` | xunit suite (78 tests): dice bounds, movement clamping, every tile effect, boss gating, win condition, turn rotation, seeded determinism |
+| `Docs/` | Game design + build docs. Design: `GAME_DESIGN_IDEATION.md`, `WORLD_1_LAYOUT.md`. Generated: `WORKSHOP-CONTEXT.md` (build context), `BUILD-SUMMARY-spec-61.md`, `PROJECT-OVERVIEW.md`, `adr/` (3 ADRs). |
 | `Planning/` | Sprint roadmap, task lists, milestones. See `SPRINT_ROADMAP.md` and `TODO.md`. |
 | `Research/` | Reference imagery, mood boards, character art. `/MontyDrawings/` has hand-drawn Dino & Cat. |
-| `Assets/` | (Will be added in Sprint 1) Unity project folder: `Scenes/`, `Scripts/`, `Sprites/`, `Audio/`, `Prefabs/`. |
+| `codeeasytemplates/` | Code Easy factory templates — see `TEMPLATES_INDEX.md` (every JSON template + how to load) and `processes/WORKSHOP_TO_BUILD_WALKTHROUGH.md` (the end-to-end demo script for this repo's real build) |
+| `Assets/` | (Will be added in the Unity sprint) Unity project folder: `Scenes/`, `Scripts/`, `Sprites/`, `Audio/`, `Prefabs/`. Unity scripts are **thin MonoBehaviour shells that call MontyGame.Core** — no game rules in the shell. |
 
 ## Key Files & Documents
 
@@ -27,6 +33,25 @@
 - `Docs/WORLD_1_LAYOUT.md` — detailed board layout (25 tiles, tile types, story beats, educational mapping)
 - `Planning/SPRINT_ROADMAP.md` — timeline & sprint breakdown (4 sprints + polish = ~8 weeks)
 - `Planning/TODO.md` — master task list (prioritized by sprint)
+- `Docs/WORKSHOP-CONTEXT.md` — the build context Code Easy generated (tech stack, structure, hard constraints for the C# core)
+- `Docs/BUILD-SUMMARY-spec-61.md` — what AutoCode built (9/9 tasks) and how
+- `Docs/adr/` — decisions that bind the code: 0001 engine-agnostic core (no UnityEngine in Core), 0002 deterministic seeded RNG (all randomness via injected `IRandom`), 0003 .NET 8 + xunit
+- `codeeasytemplates/TEMPLATES_INDEX.md` — every Code Easy JSON template for this repo + how to load each; `workshops/montygame-core-world1.workshop.json` is the bundle that produced spec #61 (edit + re-ingest for the next phase)
+
+## Working on the built core (read before touching `src/`)
+
+```bash
+dotnet build                                       # must stay at 0 errors
+dotnet test                                        # must stay green (78 tests)
+dotnet run --project src/MontyGame.Cli -- --auto   # full playthrough must reach victory, exit 0
+```
+
+**Hard constraints (from the ADRs — do not violate):**
+1. **Zero `UnityEngine` references in `MontyGame.Core`** — the Unity shell consumes it, never the reverse. Keep the public API engine-neutral (plain C# types, events/callbacks).
+2. **All randomness through the injected `IRandom`** — never `new Random()` inline. Seeded games must stay reproducible (tests depend on it).
+3. **Forgiving design** — position clamps to tiles 1–25, no eliminations, no instant game-over. The rules' source of truth is `Docs/GAME_DESIGN_IDEATION.md` + `Docs/WORLD_1_LAYOUT.md`; the tests assert them.
+
+**Still to build in the core** (were `should`/`could` in the workshop bundle — promote to `must` and re-ingest, or spec directly): Dino stomp & Cat pounce abilities (`Characters.cs`), story-beat events (`StoryBeats.cs`), game-state save/load (`GameState.cs`). Then the Unity shell sprint wires scenes/sprites/input to `GameEngine`.
 
 ---
 
@@ -91,13 +116,19 @@ Help Dino & Cat escape a multi-world adventure and return home by navigating thr
 
 ## Development Phases
 
+> **2026-07-06 update:** the *game-logic* halves of Sprints 1–2 and part of 4 are
+> already done in `MontyGame.Core` (board, all tile types, dice/cards, turn engine
+> for solo + 2–4 players, win condition — all tested). The sprints below are now
+> primarily **Unity shell work**: scenes, sprites, input, animation and audio wired
+> as thin MonoBehaviours over the core (ADR 0001).
+
 ### Sprint 1: Foundation & Prototype (Weeks 1–2)
-Set up Unity project, test platformer feel on 5-tile prototype, validate core mechanics.
+Set up Unity project, reference `MontyGame.Core`, test platformer feel on a 5-tile prototype driven by the real `GameEngine`.
 **→ Deliverable:** 5-tile playable prototype
 
 ### Sprint 2: Board & Tile System (Weeks 3–4)
-Build full World 1 board (25 tiles), implement all tile types (portal, whirlpool, elevator, hyperspace, boss), board state management.
-**→ Deliverable:** Complete board with all mechanics
+Render the full World 1 board (25 tiles) from the core's `World1` factory; visualize the tile effects the core already computes (portal, whirlpool, elevator, hyperspace, boss).
+**→ Deliverable:** Complete board with all mechanics on screen
 
 ### Sprint 3: Characters & Animation (Weeks 5–6)
 Convert hand-drawn characters to sprite sheets, implement character controllers, special abilities, animation system, audio foundation.
@@ -139,11 +170,12 @@ See `Planning/SPRINT_ROADMAP.md` for detailed sprint breakdown.
 - `.gitkeep` files in empty folders (Docs, Planning) — don't delete these
 
 ### Code & Development
-- **Language:** C# (Unity standard)
-- **Organization:** Separate scripts by system (Player, Board, UI, Manager, etc.)
+- **Language:** C# — game rules live in `src/MontyGame.Core` (plain .NET 8), Unity scripts are thin shells that call it
+- **Organization:** Separate scripts by system (Player, Board, UI, Manager, etc.); no rules/logic in MonoBehaviours
 - **Asset Management:** Keep sprites, audio, prefabs in organized subfolders under `Assets/`
-- **Version Control:** Git-tracked; add `.gitignore` for Unity (bin/, obj/, Library/, etc.)
-- **No code yet:** This is planning phase. Development starts Sprint 1 after planning docs are committed.
+- **Version Control:** Git-tracked; `.gitignore` covers bin/, obj/ (extend for Unity's Library/ when the shell lands)
+- **Quality bar for any core change:** `dotnet test` green + the CLI `--auto` playthrough reaches victory
+- **AutoCode:** this repo builds through Code Easy (toolchain auto-detected as **dotnet**: `dotnet build`/`dotnet test` gate every phase). Templates + the exact process: `codeeasytemplates/TEMPLATES_INDEX.md` and `codeeasytemplates/processes/WORKSHOP_TO_BUILD_WALKTHROUGH.md`
 
 ### Documentation & Communication
 - **Design-First:** Update design docs before coding features
@@ -173,8 +205,8 @@ See `Planning/SPRINT_ROADMAP.md` for detailed sprint breakdown.
 ## Open Questions (To Lock In)
 
 These can be decided as we build, but discussing now helps:
-- [ ] **Win Condition:** First to finish? Highest score? Most power-ups?
-- [ ] **Tie-Breaking:** If multiple players reach goal simultaneously, how is winner determined?
+- [x] **Win Condition:** First to reach tile 25 (implemented + tested in `GameEngine`; revisit only if design changes)
+- [x] **Tie-Breaking:** Not possible — turns are strictly sequential, the first player to land on tile 25 ends the game immediately
 - [ ] **Difficulty Scaling:** Should Worlds 2–3 have harder obstacles, or stay consistent per world?
 - [ ] **Character Voice:** Do Dino & Cat speak (voice lines), or silent gameplay with sound effects?
 - [ ] **Cosmetics:** Should there be character customization (color changes, hats) or just story progression?

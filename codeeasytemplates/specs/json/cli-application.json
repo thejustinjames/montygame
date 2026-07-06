@@ -1,0 +1,61 @@
+{
+  "$schema": "https://codeeasy.dev/spec-schema/v1",
+  "name": "",
+  "version": "0.1.0",
+  "description": "Command-line application template",
+
+  "documents": {
+    "readme": "README.md",
+    "claude_config": "CLAUDE.md"
+  },
+
+  "guardrails": {
+    "no_claude_commits": true,
+    "require_approval": true,
+    "require_tests": false,
+    "max_file_size_lines": 500,
+    "allowed_file_types": [".ts", ".js", ".json", ".md"],
+    "blocked_paths": ["node_modules", ".env", "dist"],
+    "allowed_write_roots": ["src", "tests", "docs"],
+    "max_files_per_task": 5
+  },
+
+  "context": {
+    "tech_stack": ["typescript", "node", "commander"],
+    "style": "modular",
+    "test_framework": null,
+    "package_manager": "npm"
+  },
+
+  "phases": [
+    {
+      "id": 1,
+      "name": "Foundation",
+      "description": "Project setup and core infrastructure",
+      "tasks": [
+        "Create package.json with dependencies",
+        "Create tsconfig.json with strict mode",
+        "Create src/index.ts CLI entry point"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Core Features",
+      "description": "Main command implementation",
+      "tasks": [
+        "Implement main command logic",
+        "Add subcommands structure",
+        "Add options and argument parsing"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Polish",
+      "description": "Documentation and final touches",
+      "tasks": [
+        "Add help text and examples",
+        "Update README with usage instructions"
+      ]
+    }
+  ]
+}

@@ -321,3 +321,23 @@ codeeasytemplates/
 
 **Last Updated:** 2026-07-06  
 **Status:** Template framework ready for testing
+
+---
+
+## JSON templates (machine-consumable — these drive Code Easy directly)
+
+**→ Full index of every JSON template + how to load each: [TEMPLATES_INDEX.md](TEMPLATES_INDEX.md)**
+
+
+The `.md` files above are human documentation; the **JSON files are the actual
+templates** Code Easy consumes:
+
+- `workshops/montygame-core-world1.workshop.json` — the filled MontyGame workshop
+  bundle that produced spec #61 (11 requirements, 3 ADRs, build context). Re-usable:
+  edit and re-ingest via the dashboard Workshop tab (Import) or
+  `codeeasy_workshop_ingest`.
+- `workshops/examples/` — the five shipped example bundles (SaaS, internal tool,
+  REST API, marketplace, mobile) + index. Same shape; load one, tweak, ingest.
+- `specs/json/` — the spec templates (`cli-application`, `express-api`,
+  `react-component`, `browser-automation`, `minimal` scaffold) with `phases[].tasks`
+  in the `spec_json` shape `codeeasy_create_spec` consumes.

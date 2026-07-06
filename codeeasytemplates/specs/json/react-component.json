@@ -1,0 +1,50 @@
+{
+  "$schema": "https://codeeasy.dev/spec-schema/v1",
+  "name": "",
+  "version": "0.1.0",
+  "description": "React component with TypeScript",
+
+  "documents": {
+    "readme": "README.md"
+  },
+
+  "guardrails": {
+    "no_claude_commits": true,
+    "require_approval": true,
+    "require_tests": false,
+    "max_file_size_lines": 300,
+    "allowed_file_types": [".tsx", ".ts", ".css", ".json", ".md"],
+    "blocked_paths": ["node_modules", "build", "dist"],
+    "allowed_write_roots": ["src", "tests"],
+    "max_files_per_task": 3
+  },
+
+  "context": {
+    "tech_stack": ["react", "typescript"],
+    "style": "component",
+    "test_framework": null,
+    "package_manager": "npm"
+  },
+
+  "phases": [
+    {
+      "id": 1,
+      "name": "Component",
+      "description": "Core component implementation",
+      "tasks": [
+        "Create component file structure",
+        "Define props interface",
+        "Implement render logic"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Styling",
+      "description": "Component styling",
+      "tasks": [
+        "Add CSS/styled-components",
+        "Implement responsive design"
+      ]
+    }
+  ]
+}

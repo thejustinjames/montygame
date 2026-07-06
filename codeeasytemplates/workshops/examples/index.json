@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "examples": [
+    {
+      "id": "saas-team-app",
+      "name": "SaaS Web App — TeamPulse",
+      "description": "Multi-tenant team-engagement SaaS: subscriptions, SSO, GDPR/SOC2 posture, full delivery pipeline.",
+      "file": "saas-team-app.workshop.json"
+    },
+    {
+      "id": "internal-admin-tool",
+      "name": "Internal Tool — OpsDesk",
+      "description": "VPN-only admin dashboard with SSO, RBAC and an audit log; boring tech on purpose.",
+      "file": "internal-admin-tool.workshop.json"
+    },
+    {
+      "id": "public-rest-api",
+      "name": "REST API Service — MetricsHub API",
+      "description": "Headless public REST API with keys/scopes, rate limiting, versioning, webhooks and usage billing.",
+      "file": "public-rest-api.workshop.json"
+    },
+    {
+      "id": "marketplace-two-sided",
+      "name": "Marketplace — MakerMarket",
+      "description": "Two-sided marketplace: listings and search, Stripe Connect payouts, reviews, KYC.",
+      "file": "marketplace-two-sided.workshop.json"
+    },
+    {
+      "id": "mobile-field-app",
+      "name": "Mobile App — FieldNote",
+      "description": "Offline-first cross-platform field-inspection app with push notifications and biometric login.",
+      "file": "mobile-field-app.workshop.json"
+    }
+  ]
+}

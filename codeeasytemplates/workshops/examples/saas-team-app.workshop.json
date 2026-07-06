@@ -1,0 +1,170 @@
+{
+  "projectName": "TeamPulse",
+  "vision": {
+    "problem": "Team leads have no live view of engagement and workload across their teams; surveys arrive weeks late and pulse data lives in spreadsheets nobody opens.",
+    "success": "Adoption: ≥ 60% of target users active weekly\nTask time reduced by 40% for running a team pulse\nMonth-2 retention ≥ 80%",
+    "audience": "Team leads and HR partners at 50–500 person companies",
+    "users": [
+      "Administrator",
+      "Business user",
+      "Manager / approver",
+      "Enterprise / org admin"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\nfunctional,User signup & login,Email + OAuth,Self-serve onboarding,must,Product\nfunctional,Subscription billing,Stripe,Monetisation,must,Product\ntechnical,Auth,JWT + refresh tokens,Stateless sessions,must,Security\ntechnical,Database,PostgreSQL,Relational + ACID,must,Architecture\narchitectural,Multi-tenancy,Row-level isolation,SaaS scale,should,Architecture\nenterprise,Compliance,SOC2 + GDPR,Enterprise sales,should,Legal",
+  "decisions": [
+    {
+      "title": "PostgreSQL over NoSQL",
+      "decision": "PostgreSQL 15 with row-level tenancy",
+      "rationale": "Relational reporting queries dominate; ACID for billing"
+    },
+    {
+      "title": "Stripe for billing",
+      "decision": "Stripe subscriptions + customer portal",
+      "rationale": "Fastest path to compliant recurring billing"
+    }
+  ],
+  "claudeMd": "## Tech Stack\n- Frontend: React 18 + Vite + TypeScript\n- Backend: Node.js + Express\n- Database: PostgreSQL\n- State: React Query + Context\n\n## Structure\n- /client/src/features - feature modules (UI + hooks)\n- /client/src/ui       - presentational components\n- /server/src          - API + services\n\n## Patterns\n- Feature-based folders, not technical layers\n- API calls only via /client/src/services/api.ts\n- TypeScript strict mode\n\n## Constraints\n- No direct fetch() in components\n- Server owns all validation\n",
+  "architectureStyle": [
+    "Architecture: client–server full-stack web app (frontend + backend API + database).",
+    "Architecture: single deployable monolith."
+  ],
+  "platforms": [
+    "Responsive web app — modern evergreen browsers.",
+    "Installable PWA with offline support."
+  ],
+  "cloud": [
+    "Deploy to AWS (ECS/Lambda, RDS, S3, CloudFront).",
+    "Provision with IaC (Terraform / Pulumi / CDK)."
+  ],
+  "operations": [
+    "SLA: 99.9% uptime (≈ 43 min/month downtime budget).",
+    "Centralised logging, metrics & distributed tracing."
+  ],
+  "teamSkills": [
+    "Team skill: JavaScript / TypeScript.",
+    "Team skill: React.",
+    "Team skill: Node / Express.",
+    "Team skill: SQL / relational databases.",
+    "Team skill: DevOps, Docker, Kubernetes."
+  ],
+  "budgetDirection": [
+    "Budget: targeted — invest in differentiators, outsource/commoditise everything else.",
+    "Budget posture: run & operate / opex — ongoing operational budget."
+  ],
+  "deliveryGovernance": [
+    "Org: stream-aligned teams own end-to-end flow.",
+    "Approach: decisions recorded as ADRs in the repo.",
+    "Approach: governance as code — fitness functions enforced in CI."
+  ],
+  "fitnessFunctions": [
+    "Fitness function: reliability_score() > 90.",
+    "Fitness function: latency_p95() < 300ms.",
+    "Fitness function: error_rate() < 1%.",
+    "Fitness function: test_coverage() > 80%.",
+    "Fitness function: security_checks() == pass."
+  ],
+  "testingStrategy": [
+    "Testing: unit tests for core logic.",
+    "Testing: integration tests across modules.",
+    "Testing: end-to-end tests of key flows.",
+    "Testing: maintain ≥ 80% test coverage."
+  ],
+  "observability": [
+    "Observability: structured, centralised logging.",
+    "Observability: application & system metrics.",
+    "Observability: error tracking (e.g. Sentry).",
+    "Observability: uptime & health-check monitoring.",
+    "Observability: alerting & on-call for incidents.",
+    "Observability: operational dashboards."
+  ],
+  "cicd": [
+    "CI/CD: automated build & test pipeline.",
+    "CI/CD: automated deployment.",
+    "CI/CD: separate dev, staging & production environments.",
+    "CI/CD: feature flags for safe rollout.",
+    "CI/CD: automated rollback on failure."
+  ],
+  "performanceScale": [
+    "Scale: support N concurrent users (specify).",
+    "Scale: scale horizontally (stateless services).",
+    "Scale: caching (CDN / app / DB) to meet targets."
+  ],
+  "deliveryContext": [
+    "Context: greenfield — a brand-new build from scratch."
+  ],
+  "monetization": [
+    "Monetization: recurring subscription plans.",
+    "Monetization: free tier + paid upgrades."
+  ],
+  "risksAssumptions": [
+    "Risk: aggressive/tight timeline.",
+    "Risk: dependency on a 3rd-party API/vendor."
+  ],
+  "domainModel": [
+    "User",
+    "Account",
+    "Organization / Team",
+    "Subscription",
+    "Payment / Invoice",
+    "Notification"
+  ],
+  "auth": [
+    "Email/password auth with secure hashing.",
+    "OAuth sign-in (Google/GitHub/Apple).",
+    "Enterprise SSO via SAML/OIDC.",
+    "Multi-factor authentication (TOTP/SMS).",
+    "JWT access + refresh token sessions.",
+    "Role-based authorization across the app."
+  ],
+  "security": [
+    "Security: TLS 1.2+ for all traffic; HSTS.",
+    "Security: encrypt sensitive data at rest.",
+    "Security: secrets in a vault/secret store — never in code or env files committed.",
+    "Security: defend against the OWASP Top 10 (injection, XSS, CSRF, etc.).",
+    "Security: validate & sanitise all input at trust boundaries.",
+    "Security: scan dependencies for known vulnerabilities (SCA) in CI.",
+    "Security: rate limiting & abuse/bot protection."
+  ],
+  "dataPrivacy": [
+    "Data: identify & protect PII; minimise collection.",
+    "Data: defined retention periods & deletion/erasure workflow.",
+    "Data: support access/export/erasure requests (GDPR/CCPA).",
+    "Data: automated backups + tested disaster recovery."
+  ],
+  "compliance": [
+    "Compliance: GDPR (EU data protection).",
+    "Compliance: SOC 2 Type II controls."
+  ],
+  "localization": [
+    "i18n: externalise strings; support multiple languages.",
+    "i18n: locale-aware dates, numbers & currencies.",
+    "i18n: store UTC; display in the user timezone."
+  ],
+  "integrations": [
+    "Integrate Stripe for payments/billing.",
+    "Send transactional email via SendGrid/Postmark.",
+    "Store files in S3-compatible object storage.",
+    "Capture product analytics events.",
+    "Social OAuth sign-in."
+  ],
+  "apiDelivery": [
+    "Expose a documented public REST API (OpenAPI).",
+    "Emit signed webhooks to subscribers."
+  ],
+  "notifications": [
+    "Notifications: transactional email.",
+    "Notifications: in-app notification centre.",
+    "Notifications: scheduled digests/summaries."
+  ],
+  "designNotes": [
+    "Light + dark themes that follow the OS setting.",
+    "Palette: indigo primary on slate neutrals.",
+    "Build with Tailwind CSS + shadcn/ui components and design tokens.",
+    "Meet WCAG 2.1 AA: contrast, labels, focus order, ARIA.",
+    "Design mobile-first; fluid layouts up to desktop.",
+    "Design empty, loading, and error states for every view.",
+    "Use a single token set for colour, spacing, type."
+  ],
+  "uiReferences": []
+}

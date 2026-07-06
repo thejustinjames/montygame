@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>
 /// Gentle, forgiving 2D platformer movement for MontyGame.
 /// - Arrow keys / A-D to move
-/// - Space to jump (with coyote-time + jump-buffer grace windows)
-/// Ground is detected with a short raycast so it "just works" on any
+/// - Space / Up / W to jump (with coyote-time + jump-buffer grace windows)
+/// Ground is detected with a short boxcast so it "just works" on any
 /// collider tagged "Ground" (the bootstrap tags the floor and all tiles).
 /// </summary>
 [RequireComponent(typeof(Rigidbody2D))]

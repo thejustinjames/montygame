@@ -1,0 +1,73 @@
+{
+  "$schema": "https://codeeasy.dev/spec-schema/v1",
+  "name": "",
+  "version": "0.1.0",
+  "description": "REST API with Express, TypeScript, and SQLite",
+
+  "documents": {
+    "readme": "README.md",
+    "architecture": "docs/ARCHITECTURE.md",
+    "claude_config": "CLAUDE.md"
+  },
+
+  "guardrails": {
+    "no_claude_commits": true,
+    "require_approval": true,
+    "require_tests": true,
+    "max_file_size_lines": 500,
+    "allowed_file_types": [".ts", ".js", ".json", ".md", ".sql"],
+    "blocked_paths": ["node_modules", ".env", "dist", "data"],
+    "allowed_write_roots": ["src", "tests", "docs", "migrations"],
+    "max_files_per_task": 5
+  },
+
+  "context": {
+    "tech_stack": ["typescript", "express", "sqlite", "node"],
+    "style": "modular",
+    "test_framework": "jest",
+    "package_manager": "npm"
+  },
+
+  "phases": [
+    {
+      "id": 1,
+      "name": "Setup",
+      "description": "Project initialization",
+      "tasks": [
+        "Initialize project with package.json",
+        "Configure TypeScript with tsconfig.json",
+        "Setup Express server entry point"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Database",
+      "description": "Database layer setup",
+      "tasks": [
+        "Create SQLite connection module",
+        "Define database schema",
+        "Create migration system"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Routes",
+      "description": "API endpoint implementation",
+      "tasks": [
+        "Create route structure",
+        "Implement CRUD endpoints",
+        "Add request validation middleware"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Testing",
+      "description": "Test coverage",
+      "tasks": [
+        "Setup Jest configuration",
+        "Write unit tests for routes",
+        "Write integration tests"
+      ]
+    }
+  ]
+}

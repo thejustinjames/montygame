@@ -1,0 +1,127 @@
+{
+  "projectName": "OpsDesk",
+  "vision": {
+    "problem": "Operations staff juggle five spreadsheets and a shared inbox to manage customer accounts; changes are untracked and errors surface days later.",
+    "success": "Business users fully replace their current spreadsheet/manual workflow.\nSupport tickets reduced by 30%",
+    "audience": "Internal operations and support teams",
+    "users": [
+      "Administrator",
+      "Business user",
+      "Support agent"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\nfunctional,Admin dashboard,Tables + filters,Operate the business,must,Ops\nfunctional,Role-based access,Admin/editor/viewer,Least privilege,must,Security\nfunctional,Audit log,Who changed what,Accountability,should,Compliance\ntechnical,SSO,Company IdP,No new passwords,must,IT\narchitectural,Internal-only,VPN / allowlist,Not public,must,Security",
+  "decisions": [
+    {
+      "title": "Monolith over microservices",
+      "decision": "Single Django deployable",
+      "rationale": "One small team; operational simplicity beats theoretical scale"
+    }
+  ],
+  "claudeMd": "## Tech Stack\n- Language: Python 3.12\n- Framework: Django 5 + DRF\n- Database: PostgreSQL 15\n- Tasks: Celery + Redis\n\n## Structure\n- apps/<domain>/ - one Django app per domain\n- Models, serializers, views per app\n\n## Patterns\n- Fat models, thin views\n- DRF serializers for all I/O\n- Migrations checked in\n\n## Constraints\n- No raw SQL unless justified\n- Type hints on public functions\n",
+  "architectureStyle": [
+    "Architecture: client–server full-stack web app (frontend + backend API + database).",
+    "Architecture: single deployable monolith."
+  ],
+  "platforms": [
+    "Responsive web app — modern evergreen browsers."
+  ],
+  "cloud": [
+    "Platform-as-a-Service — managed runtime, minimal ops."
+  ],
+  "operations": [
+    "OLA: internal team response/handoff times underpinning the SLA.",
+    "Centralised logging, metrics & distributed tracing."
+  ],
+  "teamSkills": [
+    "Team skill: Python.",
+    "Team skill: Django / Rails / Spring.",
+    "Team skill: SQL / relational databases.",
+    "Team context: small team or solo — favour simple, low-maintenance stacks; avoid single-person dependency."
+  ],
+  "budgetDirection": [
+    "Budget: minimise ongoing run/operate cost.",
+    "Budget: optimise Product-stage components — buy & configure proven products to deliver value."
+  ],
+  "deliveryGovernance": [
+    "Approach: decisions recorded as ADRs in the repo."
+  ],
+  "fitnessFunctions": [
+    "Fitness function: reliability_score() > 90.",
+    "Fitness function: test_coverage() > 80%."
+  ],
+  "testingStrategy": [
+    "Testing: unit tests for core logic.",
+    "Testing: integration tests across modules.",
+    "Testing: manual QA pass before release."
+  ],
+  "observability": [
+    "Observability: structured, centralised logging.",
+    "Observability: error tracking (e.g. Sentry).",
+    "Observability: uptime & health-check monitoring."
+  ],
+  "cicd": [
+    "CI/CD: automated build & test pipeline.",
+    "CI/CD: automated deployment.",
+    "CI/CD: separate dev, staging & production environments."
+  ],
+  "performanceScale": [
+    "Scale: low p95 latency target (specify)."
+  ],
+  "deliveryContext": [
+    "Context: brownfield — extend/modify an existing codebase.",
+    "Context: integrate with existing/legacy systems."
+  ],
+  "monetization": [
+    "Monetization: internal tool — not monetised."
+  ],
+  "risksAssumptions": [
+    "Risk: knowledge concentrated in one person.",
+    "Risk: uncertain data quality or availability."
+  ],
+  "domainModel": [
+    "User",
+    "Account",
+    "Role / Permission",
+    "Audit log entry",
+    "Task"
+  ],
+  "auth": [
+    "Enterprise SSO via SAML/OIDC.",
+    "Role-based authorization across the app."
+  ],
+  "security": [
+    "Security: TLS 1.2+ for all traffic; HSTS.",
+    "Security: least-privilege access; scoped roles & service accounts.",
+    "Security: tamper-evident audit log of sensitive actions.",
+    "Security: validate & sanitise all input at trust boundaries."
+  ],
+  "dataPrivacy": [
+    "Data: identify & protect PII; minimise collection.",
+    "Data: classify data (public/internal/confidential/restricted).",
+    "Data: automated backups + tested disaster recovery."
+  ],
+  "compliance": [],
+  "localization": [
+    "i18n: single locale for now (English) — design strings to be externalisable later."
+  ],
+  "integrations": [
+    "Integrate Slack for notifications/commands.",
+    "Consume a custom or internal API (define endpoints & auth)."
+  ],
+  "apiDelivery": [
+    "API is internal/private — not publicly exposed."
+  ],
+  "notifications": [
+    "Notifications: transactional email.",
+    "Notifications: in-app notification centre."
+  ],
+  "designNotes": [
+    "Support a light theme.",
+    "Palette: professional blue on gray neutrals.",
+    "Use Ant Design components & patterns (data-dense enterprise UI).",
+    "Everything operable by keyboard; visible focus states.",
+    "Design empty, loading, and error states for every view."
+  ],
+  "uiReferences": []
+}

@@ -1,0 +1,145 @@
+{
+  "projectName": "MetricsHub API",
+  "vision": {
+    "problem": "Partners integrate our metrics by scraping CSV exports; there is no supported programmatic access, so every integration is bespoke and brittle.",
+    "success": "A developer integrates via the API in under an hour using the docs alone.\nUptime ≥ 99.9%",
+    "audience": "External developers and partner platforms",
+    "users": [
+      "Developer / API consumer",
+      "Enterprise / org admin"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\nfunctional,Public REST API,OpenAPI 3.0,Integrations,must,Product\ntechnical,Auth,API keys + scopes,Per-client access,must,Security\ntechnical,Rate limiting,Per-key quotas,Abuse protection,must,Platform\ntechnical,Versioning,/v1 prefix,Backwards compat,should,Architecture\nfunctional,Webhooks,Signed events,Push updates,should,Product",
+  "decisions": [
+    {
+      "title": "REST over GraphQL",
+      "decision": "OpenAPI 3.0 REST with /v1 prefix",
+      "rationale": "Partner tooling and caching favour plain REST"
+    }
+  ],
+  "claudeMd": "## Tech Stack\n- Runtime: Node.js 20 LTS\n- Framework: Express.js\n- Database: PostgreSQL 15\n- ORM: Prisma\n\n## Structure\n- /src/routes   - HTTP endpoints\n- /src/services - business logic\n- /src/db       - data access\n- /src/lib      - shared utilities\n\n## Patterns\n- Thin routes, logic in services\n- All DB access through /src/db\n- Validate input at the route boundary\n\n## Constraints\n- No business logic in routes\n- All external calls have error handling\n",
+  "architectureStyle": [
+    "Architecture: backend/API service only (headless, no UI)."
+  ],
+  "platforms": [
+    "No UI — API/service consumed by other clients."
+  ],
+  "cloud": [
+    "Deploy to AWS (ECS/Lambda, RDS, S3, CloudFront).",
+    "Containerised on Kubernetes (managed cluster).",
+    "Provision with IaC (Terraform / Pulumi / CDK)."
+  ],
+  "operations": [
+    "SLA: 99.99% uptime (≈ 4 min/month downtime budget).",
+    "Single API gateway for routing, auth & rate limiting.",
+    "Centralised logging, metrics & distributed tracing.",
+    "Circuit breakers, retries & bulkheads between services."
+  ],
+  "teamSkills": [
+    "Team skill: JavaScript / TypeScript.",
+    "Team skill: Node / Express.",
+    "Team skill: SQL / relational databases.",
+    "Team skill: DevOps, Docker, Kubernetes.",
+    "Team skill: cloud platforms (AWS/GCP/Azure)."
+  ],
+  "budgetDirection": [
+    "Budget: invest in novel/Genesis components — build custom to create the future.",
+    "Budget posture: run & operate / opex — ongoing operational budget."
+  ],
+  "deliveryGovernance": [
+    "Org: stream-aligned teams own end-to-end flow.",
+    "Approach: decisions recorded as ADRs in the repo.",
+    "Approach: governance as code — fitness functions enforced in CI."
+  ],
+  "fitnessFunctions": [
+    "Fitness function: latency_p95() < 300ms.",
+    "Fitness function: error_rate() < 1%.",
+    "Fitness function: security_checks() == pass.",
+    "Fitness function: no critical outdated/vulnerable deps."
+  ],
+  "testingStrategy": [
+    "Testing: unit tests for core logic.",
+    "Testing: contract tests for API boundaries.",
+    "Testing: load & performance tests."
+  ],
+  "observability": [
+    "Observability: structured, centralised logging.",
+    "Observability: application & system metrics.",
+    "Observability: distributed tracing across services.",
+    "Observability: alerting & on-call for incidents.",
+    "Observability: operational dashboards."
+  ],
+  "cicd": [
+    "CI/CD: automated build & test pipeline.",
+    "CI/CD: automated deployment.",
+    "CI/CD: separate dev, staging & production environments.",
+    "CI/CD: blue-green or canary releases.",
+    "CI/CD: automated rollback on failure.",
+    "CI/CD: infrastructure provisioned as code."
+  ],
+  "performanceScale": [
+    "Scale: target requests-per-second (specify).",
+    "Scale: low p95 latency target (specify).",
+    "Scale: scale horizontally (stateless services).",
+    "Scale: caching (CDN / app / DB) to meet targets.",
+    "Scale: handle spiky/bursty traffic."
+  ],
+  "deliveryContext": [
+    "Context: greenfield — a brand-new build from scratch."
+  ],
+  "monetization": [
+    "Monetization: usage/metered billing."
+  ],
+  "risksAssumptions": [
+    "Risk: unproven scaling characteristics.",
+    "Risk: dependency on a 3rd-party API/vendor."
+  ],
+  "domainModel": [
+    "User",
+    "Account",
+    "Product / Item",
+    "Document / File"
+  ],
+  "auth": [
+    "API-key auth for programmatic access.",
+    "JWT access + refresh token sessions.",
+    "Role-based authorization across the app."
+  ],
+  "security": [
+    "Security: TLS 1.2+ for all traffic; HSTS.",
+    "Security: secrets in a vault/secret store — never in code or env files committed.",
+    "Security: defend against the OWASP Top 10 (injection, XSS, CSRF, etc.).",
+    "Security: validate & sanitise all input at trust boundaries.",
+    "Security: scan dependencies for known vulnerabilities (SCA) in CI.",
+    "Security: static & dynamic application security testing in CI.",
+    "Security: rate limiting & abuse/bot protection.",
+    "Security: tamper-evident audit log of sensitive actions."
+  ],
+  "dataPrivacy": [
+    "Data: classify data (public/internal/confidential/restricted).",
+    "Data: defined retention periods & deletion/erasure workflow.",
+    "Data: automated backups + tested disaster recovery."
+  ],
+  "compliance": [
+    "Compliance: SOC 2 Type II controls."
+  ],
+  "localization": [
+    "i18n: single locale for now (English) — design strings to be externalisable later.",
+    "i18n: store UTC; display in the user timezone."
+  ],
+  "integrations": [
+    "Store files in S3-compatible object storage.",
+    "Capture product analytics events."
+  ],
+  "apiDelivery": [
+    "Expose a documented public REST API (OpenAPI).",
+    "Emit signed webhooks to subscribers.",
+    "Provide client SDKs for the API."
+  ],
+  "notifications": [
+    "Notifications: transactional email.",
+    "Notifications: outbound webhooks to users/systems."
+  ],
+  "designNotes": [],
+  "uiReferences": []
+}

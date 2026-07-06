@@ -1,0 +1,137 @@
+{
+  "projectName": "FieldNote",
+  "vision": {
+    "problem": "Field inspectors capture findings on paper in areas with no signal, then retype everything at the office; photos get lost and reports ship days late.",
+    "success": "A sole user completes the core task end-to-end on their first visit.\nTask time reduced by 60% per inspection",
+    "audience": "Field inspectors and their back-office reviewers",
+    "users": [
+      "Sole / individual user",
+      "Business user",
+      "Manager / approver"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\nfunctional,Onboarding,3-screen intro,First-run UX,must,Design\ntechnical,Offline support,Local cache + sync,Flaky networks,should,Architecture\ntechnical,Push notifications,APNs/FCM,Re-engagement,should,Product\nfunctional,Biometric login,FaceID/fingerprint,Fast secure access,should,Security",
+  "decisions": [
+    {
+      "title": "Cross-platform over native",
+      "decision": "React Native + a sync-capable local store",
+      "rationale": "One codebase for iOS/Android with an offline-first data layer"
+    }
+  ],
+  "claudeMd": "## Tech Stack\n- Compute: AWS Lambda (or Cloudflare Workers)\n- API: API Gateway / Hono\n- Database: DynamoDB / D1\n- IaC: SST / Terraform\n\n## Patterns\n- One function per route/handler\n- Stateless; no local disk\n- Idempotent handlers\n\n## Constraints\n- Cold-start budget < 1s\n- No long-running processes\n- Secrets via env / secret store only\n",
+  "architectureStyle": [
+    "Architecture: mobile app client talking to a backend API.",
+    "Architecture: offline/local-first with sync."
+  ],
+  "platforms": [
+    "Native iOS app (iPhone/iPad), current − 2 versions.",
+    "Native Android app, API level 26+.",
+    "Single mobile codebase for iOS + Android."
+  ],
+  "cloud": [
+    "Deploy to AWS (ECS/Lambda, RDS, S3, CloudFront).",
+    "Provision with IaC (Terraform / Pulumi / CDK)."
+  ],
+  "operations": [
+    "SLA: 99.9% uptime (≈ 43 min/month downtime budget).",
+    "DR: defined RTO (recovery time) & RPO (data-loss) targets."
+  ],
+  "teamSkills": [
+    "Team skill: JavaScript / TypeScript.",
+    "Team skill: React.",
+    "Team skill: native mobile (Swift/Kotlin).",
+    "Team skill: cloud platforms (AWS/GCP/Azure)."
+  ],
+  "budgetDirection": [
+    "Budget: optimise Product-stage components — buy & configure proven products to deliver value.",
+    "Budget: outsource Commodity components — use managed/commodity services to stay efficient."
+  ],
+  "deliveryGovernance": [
+    "Org: stream-aligned teams own end-to-end flow.",
+    "Approach: decisions recorded as ADRs in the repo."
+  ],
+  "fitnessFunctions": [
+    "Fitness function: reliability_score() > 90.",
+    "Fitness function: error_rate() < 1%.",
+    "Fitness function: test_coverage() > 80%."
+  ],
+  "testingStrategy": [
+    "Testing: unit tests for core logic.",
+    "Testing: integration tests across modules.",
+    "Testing: manual QA pass before release."
+  ],
+  "observability": [
+    "Observability: structured, centralised logging.",
+    "Observability: error tracking (e.g. Sentry).",
+    "Observability: real-user/front-end monitoring."
+  ],
+  "cicd": [
+    "CI/CD: automated build & test pipeline.",
+    "CI/CD: automated deployment.",
+    "CI/CD: separate dev, staging & production environments."
+  ],
+  "performanceScale": [
+    "Scale: handle large/growing data volumes.",
+    "Scale: low p95 latency target (specify)."
+  ],
+  "deliveryContext": [
+    "Context: migrate or replatform from an existing system."
+  ],
+  "monetization": [
+    "Monetization: enterprise contracts, sales-led."
+  ],
+  "risksAssumptions": [
+    "Risk: complex/uncertain integrations.",
+    "Risk: uncertain data quality or availability."
+  ],
+  "domainModel": [
+    "User",
+    "Project",
+    "Task",
+    "Document / File",
+    "Notification"
+  ],
+  "auth": [
+    "Email/password auth with secure hashing.",
+    "Passkey/WebAuthn passwordless auth.",
+    "JWT access + refresh token sessions."
+  ],
+  "security": [
+    "Security: TLS 1.2+ for all traffic; HSTS.",
+    "Security: encrypt sensitive data at rest.",
+    "Security: secrets in a vault/secret store — never in code or env files committed.",
+    "Security: validate & sanitise all input at trust boundaries."
+  ],
+  "dataPrivacy": [
+    "Data: identify & protect PII; minimise collection.",
+    "Data: store data in required region(s) for residency/sovereignty.",
+    "Data: automated backups + tested disaster recovery."
+  ],
+  "compliance": [
+    "Compliance: accessibility regulations (ADA / Section 508 / EN 301 549)."
+  ],
+  "localization": [
+    "i18n: externalise strings; support multiple languages.",
+    "i18n: store UTC; display in the user timezone."
+  ],
+  "integrations": [
+    "Store files in S3-compatible object storage.",
+    "Integrate maps & geocoding.",
+    "Integrate Twilio for SMS/voice."
+  ],
+  "apiDelivery": [
+    "API is internal/private — not publicly exposed."
+  ],
+  "notifications": [
+    "Notifications: mobile/web push.",
+    "Notifications: transactional email."
+  ],
+  "designNotes": [
+    "Light + dark themes that follow the OS setting.",
+    "Palette: emerald primary on charcoal neutrals.",
+    "Follow Material Design 3 — elevation, motion, dynamic colour.",
+    "Meet WCAG 2.1 AA: contrast, labels, focus order, ARIA.",
+    "Design empty, loading, and error states for every view."
+  ],
+  "uiReferences": []
+}

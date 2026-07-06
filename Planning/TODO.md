@@ -1,7 +1,30 @@
 # MontyGame Development — Master TODO List
 
-**Status:** Planning Phase ✓ → Development Phase (Starting)  
+**Status:** Planning ✓ → **World 1 core logic BUILT & TESTED** ✓ (Code Easy AutoCode spec #61, 2026-07-06) → Unity shell next  
 **Target:** MVP Complete by end of Sprint 4 (8 weeks)
+
+---
+
+## CORE GAME LOGIC — built by AutoCode (spec #61) ✓
+
+All game *rules* now live in `src/MontyGame.Core` (pure C#, no UnityEngine — see
+`Docs/adr/`). Verify any time: `dotnet test` (78 green) and
+`dotnet run --project src/MontyGame.Cli -- --auto` (full playthrough to victory).
+
+- [x] Solution scaffold (`MontyGame.sln`: Core + Tests + Cli)
+- [x] 25-tile World 1 board model (all tile types: Normal, TimePortal, Whirlpool, Elevator, HyperspaceJump, Mystery, Boss)
+- [x] Dice (1–6) + movement cards (Jump 3 / Dash 4 / Slow Step 2) with injected seedable `IRandom`
+- [x] Tile effects engine (portal +3..+5, whirlpool −2..−4, elevator +2, hyperspace warp, mystery, boss gate; clamped 1–25, no eliminations)
+- [x] Turn engine: solo + 2–4 pass-and-play, win at tile 25
+- [x] CLI playthrough simulator (`--auto`, story beats printed, exit 0 on victory)
+- [x] xunit suite: dice bounds, clamping, every tile effect, boss gating, win condition, turn rotation, seeded determinism
+
+**Core still to build** (were `should`/`could` in the workshop bundle — promote to
+`must` in `codeeasytemplates/workshops/montygame-core-world1.workshop.json` and
+re-ingest, or spec directly):
+- [ ] Dino stomp & Cat pounce abilities (`Characters.cs`)
+- [ ] Story-beat events raised by the engine (`StoryBeats.cs`)
+- [ ] Game-state save/load (`GameState.cs`, System.Text.Json)
 
 ---
 
@@ -16,8 +39,8 @@
 - [x] Tech stack decision (Unity Personal)
 - [x] MVP priority (balanced: playable + pretty + educational)
 - [ ] **LOCKED IN:** Finalize any remaining open questions from GAME_DESIGN_IDEATION.md
-  - [ ] Win condition (first to finish? highest score?)
-  - [ ] Tie-breaking mechanic for multiplayer
+  - [x] Win condition — first to reach tile 25 (implemented + tested in `GameEngine`)
+  - [x] Tie-breaking — not possible: turns are sequential; first to land on 25 ends the game
   - [ ] Voice acting (silent or dialogue?)
   - [ ] Character cosmetics (unlockables post-MVP?)
 
@@ -35,6 +58,12 @@
 ---
 
 ## SPRINT 1: Foundation & Prototype (Weeks 1–2)
+
+> **Reframed after the core build:** the *logic* items below (dice roll, card
+> draw, tile advancement, the roll → move → land → effect → next-turn loop) are
+> **done in `MontyGame.Core`** — Sprint 1 is Unity *shell* work: scenes, sprites,
+> input and platforming feel, driven by the real `GameEngine` (thin
+> MonoBehaviours only; no rules in Unity scripts — ADR 0001).
 
 ### Unity Project Setup
 - [ ] Create Unity project (2D, target resolution 1920x1080)
@@ -77,8 +106,14 @@
 
 ## SPRINT 2: Board & Tile System (Weeks 3–4)
 
+> **Reframed:** the board model, every tile effect, and board state already exist
+> and are tested in `MontyGame.Core` (`Board`, `Tile`, `TileEffects`). Sprint 2 is
+> *rendering* that board in Unity — prefabs, visuals, and feedback for effects the
+> core computes. "Tile effect logic" below = wire visuals to core events, don't
+> re-implement rules.
+
 ### Board Implementation
-- [ ] Create World 1 board layout in Unity (25 tiles, winding path)
+- [ ] Create World 1 board layout in Unity (25 tiles, winding path — rendered from the core's `World1` factory)
 - [ ] Implement tile prefab system:
   - [ ] Normal tile (no effect)
   - [ ] Portal tile (warp forward)
@@ -134,6 +169,10 @@
 - [ ] Create UI character portraits (for character select, HUD)
 
 ### Character Controller
+> Ability *rules* (stomp negates an obstacle penalty; pounce +1 movement with
+> cooldown) belong in `MontyGame.Core/Characters.cs` — still to build, see the
+> CORE GAME LOGIC section at the top. The items below are the Unity *feel*:
+> input, animation, screen-shake, sound.
 - [ ] Implement character select (Dino vs. Cat)
 - [ ] Create character-specific stat system (jump height, speed, abilities)
 - [ ] Implement Dino stomp ability (ground shake, obstacle clear)
@@ -164,6 +203,10 @@
 ---
 
 ## SPRINT 4: Game Modes & UI (Weeks 7–8)
+
+> **Reframed:** solo mode, 2–4 player turn order, and the victory condition are
+> implemented + tested in `MontyGame.Core.GameEngine`. Sprint 4 builds the Unity
+> UI/flow around them (menus, HUD, turn indicator, victory screens).
 
 ### Game Mode Implementation
 - [ ] **Solo Mode:**

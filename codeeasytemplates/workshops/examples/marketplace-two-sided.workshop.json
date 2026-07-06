@@ -1,0 +1,159 @@
+{
+  "projectName": "MakerMarket",
+  "vision": {
+    "problem": "Independent makers sell through social DMs and spreadsheets; buyers cannot discover, trust, or pay them safely in one place.",
+    "success": "Conversion rate ≥ 3%\nMonth-2 retention ≥ 40% for sellers\nRevenue / cost-saving target of $50k GMV/month",
+    "audience": "Independent makers (sellers) and hobbyist buyers",
+    "users": [
+      "Sole / individual user",
+      "Business user",
+      "Guest / anonymous",
+      "Administrator"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\nfunctional,Buyer & seller accounts,Distinct roles,Two-sided,must,Product\nfunctional,Listings & search,Full-text + filters,Discovery,must,Product\nfunctional,Payments & payouts,Stripe Connect,Marketplace flow,must,Finance\nfunctional,Reviews & ratings,Trust signals,Trust,should,Product\nenterprise,KYC,Identity checks,Fraud & compliance,should,Legal",
+  "decisions": [
+    {
+      "title": "Stripe Connect for payouts",
+      "decision": "Destination charges with Connect Express",
+      "rationale": "Compliant marketplace payouts without money-transmitter licensing"
+    },
+    {
+      "title": "Search with Postgres FTS first",
+      "decision": "Postgres full-text before adding a search engine",
+      "rationale": "Defer Elasticsearch cost until listings volume demands it"
+    }
+  ],
+  "claudeMd": "## Tech Stack\n- Frontend: React 18 + Vite + TypeScript\n- Backend: Node.js + Express\n- Database: PostgreSQL\n- State: React Query + Context\n\n## Structure\n- /client/src/features - feature modules (UI + hooks)\n- /client/src/ui       - presentational components\n- /server/src          - API + services\n\n## Patterns\n- Feature-based folders, not technical layers\n- API calls only via /client/src/services/api.ts\n- TypeScript strict mode\n\n## Constraints\n- No direct fetch() in components\n- Server owns all validation\n",
+  "architectureStyle": [
+    "Architecture: client–server full-stack web app (frontend + backend API + database).",
+    "Architecture: single deployable monolith."
+  ],
+  "platforms": [
+    "Responsive web app — modern evergreen browsers.",
+    "Installable PWA with offline support."
+  ],
+  "cloud": [
+    "Deploy to Vercel/Netlify (serverless + edge).",
+    "Provision with IaC (Terraform / Pulumi / CDK)."
+  ],
+  "operations": [
+    "SLA: 99.9% uptime (≈ 43 min/month downtime budget).",
+    "Centralised logging, metrics & distributed tracing."
+  ],
+  "teamSkills": [
+    "Team skill: JavaScript / TypeScript.",
+    "Team skill: React.",
+    "Team skill: Node / Express.",
+    "Team skill: SQL / relational databases.",
+    "Team context: small team or solo — favour simple, low-maintenance stacks; avoid single-person dependency."
+  ],
+  "budgetDirection": [
+    "Budget: targeted — invest in differentiators, outsource/commoditise everything else.",
+    "Budget: prioritise speed to market over cost."
+  ],
+  "deliveryGovernance": [
+    "Approach: evolutionary architecture — decide at the last responsible moment.",
+    "Approach: decisions recorded as ADRs in the repo."
+  ],
+  "fitnessFunctions": [
+    "Fitness function: reliability_score() > 90.",
+    "Fitness function: latency_p95() < 300ms.",
+    "Fitness function: security_checks() == pass.",
+    "Fitness function: accessibility() == WCAG 2.1 AA."
+  ],
+  "testingStrategy": [
+    "Testing: unit tests for core logic.",
+    "Testing: end-to-end tests of key flows.",
+    "Testing: maintain ≥ 80% test coverage."
+  ],
+  "observability": [
+    "Observability: structured, centralised logging.",
+    "Observability: error tracking (e.g. Sentry).",
+    "Observability: real-user/front-end monitoring.",
+    "Observability: alerting & on-call for incidents."
+  ],
+  "cicd": [
+    "CI/CD: automated build & test pipeline.",
+    "CI/CD: automated deployment.",
+    "CI/CD: separate dev, staging & production environments.",
+    "CI/CD: ephemeral preview environments per PR.",
+    "CI/CD: feature flags for safe rollout."
+  ],
+  "performanceScale": [
+    "Scale: support N concurrent users (specify).",
+    "Scale: caching (CDN / app / DB) to meet targets.",
+    "Scale: handle spiky/bursty traffic."
+  ],
+  "deliveryContext": [
+    "Context: greenfield — a brand-new build from scratch."
+  ],
+  "monetization": [
+    "Monetization: take a fee on marketplace transactions."
+  ],
+  "risksAssumptions": [
+    "Risk: unvalidated market demand.",
+    "Risk: regulatory/compliance uncertainty.",
+    "Risk: dependency on a 3rd-party API/vendor."
+  ],
+  "domainModel": [
+    "User",
+    "Product / Item",
+    "Order",
+    "Payment / Invoice",
+    "Message / Comment"
+  ],
+  "auth": [
+    "Email/password auth with secure hashing.",
+    "OAuth sign-in (Google/GitHub/Apple).",
+    "Passwordless magic-link email login.",
+    "Role-based authorization across the app."
+  ],
+  "security": [
+    "Security: TLS 1.2+ for all traffic; HSTS.",
+    "Security: encrypt sensitive data at rest.",
+    "Security: defend against the OWASP Top 10 (injection, XSS, CSRF, etc.).",
+    "Security: validate & sanitise all input at trust boundaries.",
+    "Security: rate limiting & abuse/bot protection.",
+    "Security: tamper-evident audit log of sensitive actions."
+  ],
+  "dataPrivacy": [
+    "Data: identify & protect PII; minimise collection.",
+    "Data: capture & honour user consent for data use.",
+    "Data: support access/export/erasure requests (GDPR/CCPA).",
+    "Data: automated backups + tested disaster recovery."
+  ],
+  "compliance": [
+    "Compliance: GDPR (EU data protection).",
+    "Compliance: PCI-DSS (card payment data)."
+  ],
+  "localization": [
+    "i18n: locale-aware dates, numbers & currencies.",
+    "i18n: support multiple currencies.",
+    "i18n: store UTC; display in the user timezone."
+  ],
+  "integrations": [
+    "Integrate Stripe for payments/billing.",
+    "Send transactional email via SendGrid/Postmark.",
+    "Store files in S3-compatible object storage.",
+    "Capture product analytics events.",
+    "Integrate maps & geocoding."
+  ],
+  "apiDelivery": [
+    "API is internal/private — not publicly exposed."
+  ],
+  "notifications": [
+    "Notifications: transactional email.",
+    "Notifications: in-app notification centre.",
+    "Notifications: mobile/web push."
+  ],
+  "designNotes": [
+    "Support a light theme.",
+    "Palette: warm amber/orange tones.",
+    "Build with Tailwind CSS + shadcn/ui components and design tokens.",
+    "Meet WCAG 2.1 AA: contrast, labels, focus order, ARIA.",
+    "Design mobile-first; fluid layouts up to desktop.",
+    "Validate flows with the target user types before build."
+  ],
+  "uiReferences": []
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://codeeasy.dev/spec-schema/v1",
+  "name": "",
+  "version": "0.1.0",
+  "description": "",
+
+  "documents": {
+    "readme": "README.md",
+    "claude_config": "CLAUDE.md"
+  },
+
+  "guardrails": {
+    "no_claude_commits": true,
+    "require_approval": true,
+    "require_tests": false,
+    "allowed_write_roots": ["src", "docs"]
+  },
+
+  "context": {
+    "tech_stack": [],
+    "style": "modular",
+    "package_manager": "npm"
+  },
+
+  "phases": []
+}

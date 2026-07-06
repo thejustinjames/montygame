@@ -1,0 +1,52 @@
+{
+  "projectName": "MontyGame Core (World 1)",
+  "summary": "Engine-agnostic C# game-logic core for MontyGame — the platformer-board hybrid for ages 5–7. Pure .NET 8 class library (board, dice, tiles, turns, story beats) + xunit tests + a console playthrough simulator. Unity Personal wraps this later with thin MonoBehaviour shells.",
+  "vision": {
+    "problem": "MontyGame's design is locked (Docs/GAME_DESIGN_IDEATION.md) but nothing is playable or testable yet. The game logic — 25-tile World 1 board, dice/card movement, portal/whirlpool/elevator/hyperspace tile effects, forgiving turn loop — needs to exist as verified code before Unity work starts, so Sprint 1 in the editor is wiring, not invention.",
+    "success": "dotnet test green with the full rules covered (movement bounds, every tile effect, win condition, turn rotation, seeded determinism)\nMontyGame.Cli --auto plays a complete seeded 2-player World 1 game to victory and exits 0\nMontyGame.Core has zero UnityEngine references — drop-in ready for the Unity shell",
+    "audience": "Players: children 5–7 (solo or 2–4 pass-and-play). Developer: Unity shell integrates the core library in Sprint 1.",
+    "users": [
+      "Solo child player (campaign)",
+      "2–4 players local pass-and-play",
+      "Unity shell developer (consumes the core API)"
+    ]
+  },
+  "requirementsCsv": "type,title,value,rationale,priority,source\ntechnical,Solution scaffold MontyGame.sln,\"Create MontyGame.sln with src/MontyGame.Core (classlib net8.0), tests/MontyGame.Core.Tests (xunit) and src/MontyGame.Cli (console net8.0)\",Engine-agnostic core Unity can reference,must,Architecture\nfunctional,Board model with 25-tile World 1 layout,\"Create src/MontyGame.Core/Board.cs and Tile.cs with tile types Normal, TimePortal, Whirlpool, Elevator, HyperspaceJump, Mystery and Boss; a World1 factory builds the 25-tile Dino Jungle board per Docs/WORLD_1_LAYOUT.md\",Board is the game's spine,must,GAME_DESIGN_IDEATION.md\nfunctional,Dice roller and movement cards,\"Create src/MontyGame.Core/Dice.cs and MovementCards.cs: 1–6 die plus cards Jump 3 / Dash 4 / Slow Step 2, drawing on Lucky Spin tiles; RNG injected via an IRandom interface with a seedable default\",Mixed dice+card movement is locked in; determinism enables fairness tests,must,GAME_DESIGN_IDEATION.md\nfunctional,Tile effects engine,\"Create src/MontyGame.Core/TileEffects.cs: TimePortal +3..+5, Whirlpool -2..-4, Elevator +2, HyperspaceJump random forward warp, Mystery draws a card effect, Boss gates progress until its challenge is passed; position always clamps to tiles 1..25 (forgiving, no eliminations)\",Thematic snakes-and-ladders alternatives are the core mechanic,must,GAME_DESIGN_IDEATION.md\nfunctional,Turn engine solo and pass-and-play,\"Create src/MontyGame.Core/GameEngine.cs: 1–4 players, turn loop roll→move→apply tile effect→next player, win on reaching tile 25; expose engine state and a TakeTurn API the Unity shell can drive\",Core loop for both solo and multiplayer modes,must,GAME_DESIGN_IDEATION.md\nfunctional,Characters Dino and Cat,\"Create src/MontyGame.Core/Characters.cs: Dino stomp ability (negates one obstacle penalty per world) and Cat pounce ability (+1 movement, once per 3 turns), applied as movement modifiers in the engine\",Character abilities per the locked design,should,GAME_DESIGN_IDEATION.md\nfunctional,Story beat events,\"Create src/MontyGame.Core/StoryBeats.cs: the engine raises events with World 1 narrative strings at game start, halfway (tile 13), boss tile and victory\",Story-driven gameplay is a pillar,should,GAME_DESIGN_IDEATION.md\nfunctional,CLI playthrough simulator,\"Create src/MontyGame.Cli/Program.cs: with --auto it plays a full seeded 2-player World 1 game to completion, printing each turn (roll, movement, tile effect, story beats) and exits 0 on victory\",Playable proof + the startup-test entry point,must,Planning/SPRINT_ROADMAP.md\ntechnical,xunit test suite,\"Create tests in tests/MontyGame.Core.Tests covering dice bounds (1..6), movement clamping at board edges, every tile effect, boss gating, win condition, 2–4 player turn rotation and seeded-game determinism\",The rules must be verified before Unity wiring,must,Planning/TODO.md\nfunctional,Game state save and load,\"Add JSON serialization of GameState in src/MontyGame.Core/GameState.cs (System.Text.Json, no external deps)\",Lets the Unity shell persist sessions,could,Planning/TODO.md\ntechnical,Unity MonoBehaviour integration,Thin MonoBehaviour shells over the core library are wired later in the Unity editor,Editor work is out of scope for the core phase,won't,Architecture\n",
+  "decisions": [
+    {
+      "title": "Engine-agnostic core library",
+      "context": "The locked tech stack is Unity, but Unity cannot be exercised by automated validation without a licensed editor in batchmode.",
+      "decision": "All game logic lives in MontyGame.Core, a pure .NET 8 class library with zero UnityEngine references; Unity gets thin MonoBehaviour shells that only call the core API.",
+      "rationale": "Maximizes the logic that agents and CI can build, test and verify; minimizes untestable editor wiring; standard pattern for testable Unity games.",
+      "alternatives": ["All-in Unity C# scripts (untestable without the editor)", "Web prototype (throwaway for the real game)"],
+      "consequences": "Unity Sprint 1 becomes integration work; the core API must stay engine-neutral (no UnityEngine types in public signatures)."
+    },
+    {
+      "title": "Deterministic seeded RNG",
+      "context": "Dice, hyperspace warps and mystery cards are random; fairness and reproducibility matter for a kids' game and for tests.",
+      "decision": "Randomness goes through an IRandom interface with a seedable default implementation, injected into the engine.",
+      "rationale": "Seeded games are replayable and unit-testable; fairness properties can be asserted.",
+      "alternatives": ["Static System.Random calls"],
+      "consequences": "All random behavior must flow through the injected source."
+    },
+    {
+      "title": ".NET 8 LTS with xunit",
+      "context": "The core library needs a long-lived, Unity-compatible C# target and a test framework.",
+      "decision": "Target net8.0 (netstandard2.1-compatible API surface where practical) and use xunit for tests.",
+      "rationale": "LTS support; xunit is the de-facto .NET test framework; Unity 2022+ consumes modern C# libraries.",
+      "alternatives": ["net48", "NUnit"],
+      "consequences": "Avoid APIs newer than what the Unity scripting runtime consumes."
+    }
+  ],
+  "claudeMd": "# MontyGame Core — build context\n\n## Tech Stack\n- .NET 8 SDK (LTS), C# 12\n- xunit for tests, System.Text.Json for serialization\n- No external NuGet packages beyond xunit — the core must stay dependency-free for Unity\n\n## Structure\n- `MontyGame.sln` — solution at repo root\n- `src/MontyGame.Core/` — pure game-logic class library (Board, Tile, Dice, MovementCards, TileEffects, GameEngine, Characters, StoryBeats, GameState)\n- `src/MontyGame.Cli/` — console playthrough simulator (`dotnet run --project src/MontyGame.Cli -- --auto`)\n- `tests/MontyGame.Core.Tests/` — xunit suite\n\n## Hard constraints\n- **Zero `UnityEngine` references in MontyGame.Core** — it will be consumed by thin MonoBehaviour shells later; keep public API engine-neutral (plain C# types, events/callbacks, no static singletons)\n- All randomness through an injected `IRandom` (seedable) — never `new Random()` inline\n- Forgiving design: players never drop below tile 1, no eliminations, no instant game-over\n- Game rules source of truth: `Docs/GAME_DESIGN_IDEATION.md` and `Docs/WORLD_1_LAYOUT.md`\n\n## Patterns\n- Engine exposes state + `TakeTurn()`; UI layers (CLI now, Unity later) render and drive it\n- Story beats and tile effects surface as events the shell can subscribe to\n- Tests assert rules from the design docs (tile effect ranges, clamping, win at tile 25)\n",
+  "architectureStyle": ["Architecture: a library/SDK with no application UI."],
+  "platforms": ["Cross-platform .NET 8 (macOS/Windows/Linux) — Unity Personal shell later per the locked stack"],
+  "teamSkills": ["Team skill: C# / .NET.", "Team context: small team or solo — favour simple, low-maintenance stacks; avoid single-person dependency."],
+  "testingStrategy": ["Testing: unit tests for core logic.", "Testing: maintain ≥ 80% test coverage.", "Testing: test-driven development."],
+  "deliveryContext": ["Context: greenfield — a brand-new build from scratch."],
+  "monetization": ["Monetization: one-time purchase or perpetual license."],
+  "risksAssumptions": ["Risk: aggressive/tight timeline.", "Risk: Unity integration assumptions must hold (core API stays engine-neutral)."],
+  "domainModel": ["Board", "Tile", "Player", "Character (Dino, Cat)", "Dice / Movement card", "Tile effect", "Story beat", "Game state"],
+  "fitnessFunctions": ["Fitness function: test_coverage() > 80%.", "Fitness function: unity_references_in_core() == 0."],
+  "uiReferences": []
+}

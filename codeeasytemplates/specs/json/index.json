@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "templates": [
+    {
+      "id": "cli-application",
+      "name": "CLI Application",
+      "description": "Command-line tool with TypeScript and Commander.js",
+      "category": "backend",
+      "file": "cli-application.json",
+      "icon": "terminal"
+    },
+    {
+      "id": "express-api",
+      "name": "Express API",
+      "description": "REST API with Express, TypeScript, and SQLite",
+      "category": "backend",
+      "file": "express-api.json",
+      "icon": "server"
+    },
+    {
+      "id": "react-component",
+      "name": "React Component",
+      "description": "React component with TypeScript",
+      "category": "frontend",
+      "file": "react-component.json",
+      "icon": "code"
+    },
+    {
+      "id": "browser-automation",
+      "name": "Browser Automation",
+      "description": "Browser automation tool with Playwright",
+      "category": "automation",
+      "file": "browser-automation.json",
+      "icon": "globe"
+    },
+    {
+      "id": "minimal",
+      "name": "Minimal",
+      "description": "Blank template with basic guardrails",
+      "category": "other",
+      "file": "minimal.json",
+      "icon": "file"
+    }
+  ]
+}

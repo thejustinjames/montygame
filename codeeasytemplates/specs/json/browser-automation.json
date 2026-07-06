@@ -1,0 +1,72 @@
+{
+  "$schema": "https://codeeasy.dev/spec-schema/v1",
+  "name": "",
+  "version": "0.1.0",
+  "description": "Browser automation tool with Playwright",
+
+  "documents": {
+    "readme": "README.md",
+    "claude_config": "CLAUDE.md"
+  },
+
+  "guardrails": {
+    "no_claude_commits": true,
+    "require_approval": true,
+    "require_tests": false,
+    "max_file_size_lines": 500,
+    "allowed_file_types": [".ts", ".js", ".json", ".md"],
+    "blocked_paths": ["node_modules", ".env", "dist", "screenshots", "downloads"],
+    "allowed_write_roots": ["src", "tests", "docs"],
+    "max_files_per_task": 5
+  },
+
+  "context": {
+    "tech_stack": ["typescript", "node", "playwright"],
+    "style": "modular",
+    "test_framework": null,
+    "package_manager": "npm"
+  },
+
+  "phases": [
+    {
+      "id": 1,
+      "name": "Foundation",
+      "description": "Project setup",
+      "tasks": [
+        "Create package.json with Playwright dependency",
+        "Create tsconfig.json",
+        "Create browser initialization module"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Page Objects",
+      "description": "Page object pattern implementation",
+      "tasks": [
+        "Create base page class",
+        "Implement login page object",
+        "Implement main page objects"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Actions",
+      "description": "Automation actions",
+      "tasks": [
+        "Implement authentication flow",
+        "Implement primary action flows",
+        "Add error handling and retries"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "CLI",
+      "description": "Command-line interface",
+      "tasks": [
+        "Create CLI entry point",
+        "Add command handlers",
+        "Add configuration options"
+      ]
+    }
+  ]
+}
