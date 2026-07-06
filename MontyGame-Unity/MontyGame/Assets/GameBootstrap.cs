@@ -22,6 +22,7 @@ public static class GameBootstrap
         CreateBackground();
         CreateSquares();
         CreateConnectors();
+        CreateMarkers();
         CreateCollectibles();
         CreateTokens();
         CreateGameManager();
@@ -50,7 +51,7 @@ public static class GameBootstrap
             if (n == "Player" || n == "Ground" || n == "_Setup" || n == "_GameManager" ||
                 n == "Background" || n.StartsWith("Token") || n.StartsWith("Tile_") ||
                 n.StartsWith("Label_") || n.StartsWith("Sq_") || n.StartsWith("Link_") ||
-                n.StartsWith("Star_"))
+                n.StartsWith("Star_") || n.StartsWith("Marker_") || n == "Carrier")
             {
                 Object.Destroy(go);
             }
@@ -181,6 +182,30 @@ public static class GameBootstrap
         lr.positionCount = 2;
         lr.SetPosition(0, BoardLayout.SquareToWorld(from) + new Vector3(0, 0, -0.5f));
         lr.SetPosition(1, BoardLayout.SquareToWorld(to) + new Vector3(0, 0, -0.5f));
+    }
+
+    static void CreateMarkers()
+    {
+        foreach (var b in BoardLayout.Ladders.Keys)
+            SpawnMarker($"Marker_L{b}", BoardLayout.LadderMarker(b), b);
+        foreach (var h in BoardLayout.Snakes.Keys)
+            SpawnMarker($"Marker_S{h}", BoardLayout.SnakeMarker(h), h);
+        Debug.Log("✓ Ladder/snake markers placed (ships, Hulk, vortexes, T-Rex)");
+    }
+
+    static void SpawnMarker(string name, string texName, int square)
+    {
+        var tex = Resources.Load<Texture2D>(texName);
+        if (tex == null) return;
+        var go = new GameObject(name);
+        go.transform.position = BoardLayout.SquareToWorld(square) + new Vector3(0, 0, -1.5f);
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                  new Vector2(0.5f, 0.5f), tex.width);
+        sr.sortingOrder = 3; // above tiles + lines, below tokens
+        float target = BoardLayout.Cell * 0.72f;
+        float w = sr.sprite.bounds.size.x;
+        if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
     }
 
     static void CreateCollectibles()

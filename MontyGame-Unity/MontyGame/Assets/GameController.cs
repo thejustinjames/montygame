@@ -249,17 +249,19 @@ public class GameController : MonoBehaviour
 
         if (BoardLayout.Ladders.TryGetValue(p.square, out int up))
         {
-            message = $"{p.name} hits a Time Portal — zoom UP!";
-            yield return new WaitForSeconds(0.35f);
-            yield return HopTo(p, up);
+            bool hulk = BoardLayout.HulkLadders.Contains(p.square);
+            message = hulk ? $"The HULK carries {p.name} up!" : $"A spaceship flies {p.name} up!";
+            yield return new WaitForSeconds(0.4f);
+            yield return CarryTo(p, up, BoardLayout.LadderMarker(p.square));
             p.square = up;
             TryCollect(p, p.square);
         }
         else if (BoardLayout.Snakes.TryGetValue(p.square, out int down))
         {
-            message = $"{p.name} hits a Whirlpool — swept down!";
-            yield return new WaitForSeconds(0.35f);
-            yield return HopTo(p, down);
+            bool trex = BoardLayout.TrexSnakes.Contains(p.square);
+            message = trex ? $"A T-REX drags {p.name} down!" : $"A vortex sucks {p.name} down!";
+            yield return new WaitForSeconds(0.4f);
+            yield return CarryTo(p, down, BoardLayout.SnakeMarker(p.square));
             p.square = down;
         }
 
@@ -319,6 +321,41 @@ public class GameController : MonoBehaviour
         }
         p.token.position = end;
         p.token.localScale = baseScale;
+    }
+
+    // Carry the player to a square with a vehicle/creature riding alongside
+    IEnumerator CarryTo(Player p, int toSquare, string markerTex)
+    {
+        GameObject carrier = null;
+        var tex = Resources.Load<Texture2D>(markerTex);
+        if (tex != null)
+        {
+            carrier = new GameObject("Carrier");
+            var csr = carrier.AddComponent<SpriteRenderer>();
+            csr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                       new Vector2(0.5f, 0.5f), tex.width);
+            csr.sortingOrder = 6; // above the token
+            float tgt = BoardLayout.Cell * 0.95f;
+            float w = csr.sprite.bounds.size.x;
+            if (w > 0.001f) carrier.transform.localScale = Vector3.one * (tgt / w);
+        }
+
+        Vector3 start = p.token.position;
+        Vector3 end = BoardLayout.SquareToWorld(toSquare) + p.offset;
+        float dur = 1.3f, t = 0f;
+        while (t < dur)
+        {
+            t += Time.deltaTime;
+            float f = t / dur;
+            Vector3 pos = Vector3.Lerp(start, end, f);
+            pos.y += Mathf.Sin(f * Mathf.PI) * 0.5f; // gentle arc
+            p.token.position = new Vector3(pos.x, pos.y, start.z);
+            if (carrier != null)
+                carrier.transform.position = new Vector3(pos.x, pos.y + 0.45f, start.z - 1f);
+            yield return null;
+        }
+        p.token.position = end;
+        if (carrier != null) Destroy(carrier);
     }
 
     void EnsureStyles()

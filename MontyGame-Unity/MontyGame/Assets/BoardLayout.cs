@@ -40,6 +40,16 @@ public static class BoardLayout
 
     public const int Boss = 100; // boss guards the final square
 
+    // Most ladders are spaceships; these bases are the Hulk instead.
+    public static readonly HashSet<int> HulkLadders = new HashSet<int> { 36 };
+    // Most snakes are vortexes; these heads are a T-Rex instead.
+    public static readonly HashSet<int> TrexSnakes = new HashSet<int> { 62 };
+
+    public static string LadderMarker(int baseSquare) =>
+        HulkLadders.Contains(baseSquare) ? "ladder_hulk" : "ladder_ship";
+    public static string SnakeMarker(int headSquare) =>
+        TrexSnakes.Contains(headSquare) ? "snake_trex" : "snake_vortex";
+
     /// <summary>World-space center of a given square number (1..100).</summary>
     public static Vector3 SquareToWorld(int n)
     {
