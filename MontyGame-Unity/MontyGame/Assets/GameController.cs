@@ -31,8 +31,11 @@ public class GameController : MonoBehaviour
     private readonly System.Random rng = new System.Random();
 
     // --- dice roll animation ---
-    private bool rolling = false;
+    private bool rolling = false;   // tumbling pip die
+    private bool popping = false;   // number pops up
     private int diceFace = 1;
+    private float dieAngle = 0f;    // tumble rotation
+    private float popScale = 1f;    // number pop bounce
 
     // --- cinematic camera ---
     private Camera cam;
@@ -43,7 +46,7 @@ public class GameController : MonoBehaviour
     const float CamLerp = 1.8f;     // smoothing speed (lower = slower, gentler zoom)
 
     private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle, dieBodyStyle, dieNumStyle;
-    private Texture2D dieBodyTex;
+    private Texture2D dieBodyTex, pipTex;
 
     IEnumerator Start()
     {
@@ -90,30 +93,46 @@ public class GameController : MonoBehaviour
         lastRoll = roll;
         Player p = players[current];
 
-        // 1) Tumble the die (numbers flip fast, then slow down)
+        // 1) Tumble the pip die (faces flip + spin, decelerating like a real die)
         rolling = true;
         message = $"{p.name} is rolling...";
         float elapsed = 0f, step = 0.05f, acc = 0f;
-        while (elapsed < 1.0f)
+        while (elapsed < 1.1f)
         {
             float dt = Time.deltaTime;
             elapsed += dt; acc += dt;
+            dieAngle += 900f * dt * (1f - elapsed / 1.1f); // spin fast, slow down
             if (acc >= step)
             {
                 acc = 0f;
                 diceFace = rng.Next(1, 7);
-                step += 0.012f; // decelerate, like a die settling
+                step += 0.012f;
             }
             yield return null;
         }
 
-        // 2) Settle on the real number and show it BIG for a moment
+        // 2) Settle flat on the rolled face for a beat
         diceFace = roll;
-        message = $"{p.name} rolled a {roll}!";
-        yield return new WaitForSeconds(1.0f);
+        dieAngle = 0f;
+        yield return new WaitForSeconds(0.4f);
         rolling = false;
 
-        // 3) Zoom in on the active player and follow them (slow, gentle)
+        // 3) Pop the number up big
+        popping = true;
+        message = $"{p.name} rolled a {roll}!";
+        float pt = 0f;
+        while (pt < 0.7f)
+        {
+            pt += Time.deltaTime;
+            float f = pt / 0.7f;
+            popScale = 1.25f - 0.25f * Mathf.Cos(Mathf.Min(f * 2f, 1f) * Mathf.PI); // overshoot then settle
+            yield return null;
+        }
+        popScale = 1f;
+        yield return new WaitForSeconds(0.4f);
+        popping = false;
+
+        // 4) Zoom in on the active player and follow them (slow, gentle)
         followTarget = p.token;
         zoomed = true;
         yield return new WaitForSeconds(1.1f);
@@ -225,17 +244,73 @@ public class GameController : MonoBehaviour
         dieBodyStyle = new GUIStyle(GUI.skin.box);
         dieBodyStyle.normal.background = dieBodyTex;
         dieNumStyle = new GUIStyle(GUI.skin.label)
-        { fontSize = 130, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        { fontSize = 150, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         dieNumStyle.normal.textColor = new Color(0.15f, 0.15f, 0.2f);
+
+        // round pip (dot) texture for real die faces
+        int d = 32; pipTex = new Texture2D(d, d, TextureFormat.RGBA32, false);
+        Vector2 c = new Vector2((d - 1) / 2f, (d - 1) / 2f);
+        for (int y = 0; y < d; y++)
+            for (int x = 0; x < d; x++)
+            {
+                float dist = Vector2.Distance(new Vector2(x, y), c);
+                bool inside = dist <= d * 0.44f;
+                pipTex.SetPixel(x, y, inside ? new Color(0.13f, 0.13f, 0.2f, 1f) : new Color(0, 0, 0, 0));
+            }
+        pipTex.Apply();
+        pipTex.filterMode = FilterMode.Bilinear;
     }
 
-    void DrawDie()
+    Rect DieRect()
     {
-        float size = Mathf.Min(Screen.width, Screen.height) * 0.30f;
+        float size = Mathf.Min(Screen.width, Screen.height) * 0.28f;
         float cx = Screen.width * 0.5f, cy = Screen.height * 0.42f;
-        var r = new Rect(cx - size / 2f, cy - size / 2f, size, size);
-        GUI.Box(r, GUIContent.none, dieBodyStyle);
-        GUI.Label(r, diceFace.ToString(), dieNumStyle);
+        return new Rect(cx - size / 2f, cy - size / 2f, size, size);
+    }
+
+    // 3x3 pip layout (fx, fy in 0..1) for each die face
+    static readonly Vector2 TL = new(0.26f, 0.26f), TC = new(0.5f, 0.26f), TR = new(0.74f, 0.26f);
+    static readonly Vector2 ML = new(0.26f, 0.5f), MC = new(0.5f, 0.5f), MR = new(0.74f, 0.5f);
+    static readonly Vector2 BL = new(0.26f, 0.74f), BC = new(0.5f, 0.74f), BR = new(0.74f, 0.74f);
+
+    Vector2[] Pips(int face)
+    {
+        switch (face)
+        {
+            case 1: return new[] { MC };
+            case 2: return new[] { TL, BR };
+            case 3: return new[] { TL, MC, BR };
+            case 4: return new[] { TL, TR, BL, BR };
+            case 5: return new[] { TL, TR, MC, BL, BR };
+            case 6: return new[] { TL, ML, BL, TR, MR, BR };
+            default: return new[] { MC };
+        }
+    }
+
+    void DrawPipDie(int face, float angle)
+    {
+        Rect r = DieRect();
+        Matrix4x4 old = GUI.matrix;
+        GUIUtility.RotateAroundPivot(angle, r.center);
+        GUI.Box(r, GUIContent.none, dieBodyStyle);         // white die body
+        float pip = r.width * 0.16f;
+        foreach (var p in Pips(face))
+        {
+            var pr = new Rect(r.x + p.x * r.width - pip / 2f,
+                              r.y + p.y * r.height - pip / 2f, pip, pip);
+            GUI.DrawTexture(pr, pipTex);
+        }
+        GUI.matrix = old;
+    }
+
+    void DrawNumberPop(int face, float scale)
+    {
+        Rect r = DieRect();
+        Vector2 ctr = r.center;
+        var big = new Rect(ctr.x - r.width * scale / 2f, ctr.y - r.height * scale / 2f,
+                           r.width * scale, r.height * scale);
+        GUI.Box(big, GUIContent.none, dieBodyStyle);
+        GUI.Label(big, face.ToString(), dieNumStyle);
     }
 
     void OnGUI()
@@ -269,8 +344,9 @@ public class GameController : MonoBehaviour
                 ResetGame();
         }
 
-        // big rolling die, drawn last so it's on top
-        if (rolling) DrawDie();
+        // drawn last so it's on top: tumbling pip die, then the number pop
+        if (rolling) DrawPipDie(diceFace, dieAngle);
+        else if (popping) DrawNumberPop(diceFace, popScale);
     }
 
     void ResetGame()
