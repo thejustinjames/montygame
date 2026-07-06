@@ -93,43 +93,44 @@ public class GameController : MonoBehaviour
         lastRoll = roll;
         Player p = players[current];
 
-        // 1) Tumble the pip die (faces flip + spin, decelerating like a real die)
+        // 1) Tumble the pip die slowly so little kids can watch each face
         rolling = true;
         message = $"{p.name} is rolling...";
-        float elapsed = 0f, step = 0.05f, acc = 0f;
-        while (elapsed < 1.1f)
+        float rollTime = 2.4f;
+        float elapsed = 0f, step = 0.14f, acc = 0f;
+        while (elapsed < rollTime)
         {
             float dt = Time.deltaTime;
             elapsed += dt; acc += dt;
-            dieAngle += 900f * dt * (1f - elapsed / 1.1f); // spin fast, slow down
+            dieAngle += 360f * dt * (1f - elapsed / rollTime); // gentle spin, slowing
             if (acc >= step)
             {
                 acc = 0f;
                 diceFace = rng.Next(1, 7);
-                step += 0.012f;
+                step += 0.03f; // faces change slower and slower
             }
             yield return null;
         }
 
-        // 2) Settle flat on the rolled face for a beat
+        // 2) Settle flat on the rolled face for a good beat
         diceFace = roll;
         dieAngle = 0f;
-        yield return new WaitForSeconds(0.4f);
+        yield return new WaitForSeconds(0.9f);
         rolling = false;
 
-        // 3) Pop the number up big
+        // 3) Pop the number up big and hold it long so kids can read it
         popping = true;
         message = $"{p.name} rolled a {roll}!";
         float pt = 0f;
-        while (pt < 0.7f)
+        while (pt < 0.8f)
         {
             pt += Time.deltaTime;
-            float f = pt / 0.7f;
+            float f = pt / 0.8f;
             popScale = 1.25f - 0.25f * Mathf.Cos(Mathf.Min(f * 2f, 1f) * Mathf.PI); // overshoot then settle
             yield return null;
         }
         popScale = 1f;
-        yield return new WaitForSeconds(0.4f);
+        yield return new WaitForSeconds(2.2f); // long hold on the big number
         popping = false;
 
         // 4) Zoom in on the active player and follow them (slow, gentle)
