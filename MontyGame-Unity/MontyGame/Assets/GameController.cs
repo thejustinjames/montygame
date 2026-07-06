@@ -458,7 +458,7 @@ public class GameController : MonoBehaviour
         EnsureStyles();
         if (players == null) return;
 
-        if (selecting) { DrawGallery(); return; }
+        if (selecting) { DrawGallery(); DrawSystemButtons(); return; }
 
         GUI.Box(new Rect(15, 15, 380, 150), GUIContent.none, boxStyle);
 
@@ -490,6 +490,26 @@ public class GameController : MonoBehaviour
         // drawn last so it's on top: shadow + tumbling die, then the number pop
         if (rolling) { DrawDieShadow(); DrawPipDie(diceFace, dieAngle); }
         else if (popping) DrawNumberPop(diceFace, popScale);
+
+        DrawSystemButtons();
+    }
+
+    void DrawSystemButtons()
+    {
+        float w = 150f, h = 44f, m = 15f;
+        var newRect = new Rect(Screen.width - w - m, m, w, h);
+        var quitRect = new Rect(Screen.width - w - m, m + h + 8f, w, h);
+        if (GUI.Button(newRect, "NEW GAME", buttonStyle)) ResetGame();
+        if (GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
+    }
+
+    void QuitGame()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     void DrawGallery()
