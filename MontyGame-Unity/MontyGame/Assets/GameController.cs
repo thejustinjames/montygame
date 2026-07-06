@@ -513,11 +513,16 @@ public class GameController : MonoBehaviour
 
         GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
 
+        if (!won) { DrawTurnBanner(); DrawTurnArrow(); }
+
         if (!busy && !won && !confirmingReset)
         {
-            string who = players[current].name;
-            if (GUI.Button(new Rect(15, 172, 250, 55), $"{who}: ROLL  🎲", buttonStyle))
+            var cp = players[current];
+            Color oldbg = GUI.backgroundColor;
+            GUI.backgroundColor = cp.color;   // ROLL button in the current player's colour
+            if (GUI.Button(new Rect(15, 172, 300, 62), $"{cp.name.ToUpper()}: ROLL  🎲", buttonStyle))
                 StartCoroutine(DoTurn(rng.Next(1, 7)));
+            GUI.backgroundColor = oldbg;
         }
         else if (won)
         {
@@ -530,6 +535,50 @@ public class GameController : MonoBehaviour
         else if (popping) DrawNumberPop(diceFace, popScale);
 
         DrawSystemButtons();
+    }
+
+    Texture2D CurrentAvatar()
+    {
+        int idx = chosen[current];
+        if (avatarTex != null && idx >= 1 && idx <= AvatarCount) return avatarTex[idx];
+        return null;
+    }
+
+    void DrawTurnBanner()
+    {
+        var p = players[current];
+        float bw = 500f, bh = 82f;
+        var box = new Rect((Screen.width - bw) / 2f, 12f, bw, bh);
+
+        Color oc = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.DrawTexture(box, Texture2D.whiteTexture);
+        GUI.color = new Color(p.color.r, p.color.g, p.color.b, 1f);
+        // coloured underline bar
+        GUI.DrawTexture(new Rect(box.x, box.yMax - 6, bw, 6), Texture2D.whiteTexture);
+        GUI.color = oc;
+
+        var av = CurrentAvatar();
+        if (av != null) GUI.DrawTexture(new Rect(box.x + 12, box.y + 9, 64, 64), av, ScaleMode.ScaleToFit, true);
+
+        var st = new GUIStyle(GUI.skin.label)
+        { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+        st.normal.textColor = p.color;
+        GUI.Label(new Rect(box.x + 88, box.y, bw - 96, bh), $"{p.name.ToUpper()}'S TURN", st);
+    }
+
+    void DrawTurnArrow()
+    {
+        if (cam == null) return;
+        var p = players[current];
+        Vector3 sp = cam.WorldToScreenPoint(p.token.position);
+        if (sp.z < 0) return;
+        float bob = Mathf.Sin(Time.time * 4f) * 8f;
+        float gy = Screen.height - sp.y;
+        var st = new GUIStyle(GUI.skin.label)
+        { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        st.normal.textColor = p.color;
+        GUI.Label(new Rect(sp.x - 34f, gy - 96f - bob, 68f, 52f), "▼", st);
     }
 
     void DrawSystemButtons()
