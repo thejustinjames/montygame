@@ -60,11 +60,21 @@ public class PlayerController : MonoBehaviour
 
     bool IsGrounded()
     {
-        // Cast a short box just below the player's feet
+        // Three short rays fired from JUST BELOW the feet (outside our own
+        // collider, so we never falsely detect ourselves). Any hit on another
+        // collider = grounded. Checking left/center/right handles tile edges.
         Bounds b = box.bounds;
-        Vector2 origin = new Vector2(b.center.x, b.min.y);
-        Vector2 size = new Vector2(b.size.x * 0.9f, 0.08f);
-        RaycastHit2D hit = Physics2D.BoxCast(origin, size, 0f, Vector2.down, 0.06f);
+        float y = b.min.y - 0.02f;            // start just below the collider
+        float rayLen = 0.15f;
+
+        return GroundRay(new Vector2(b.center.x, y), rayLen)
+            || GroundRay(new Vector2(b.min.x + 0.05f, y), rayLen)
+            || GroundRay(new Vector2(b.max.x - 0.05f, y), rayLen);
+    }
+
+    bool GroundRay(Vector2 origin, float length)
+    {
+        RaycastHit2D hit = Physics2D.Raycast(origin, Vector2.down, length);
         return hit.collider != null && hit.collider.gameObject != gameObject;
     }
 
