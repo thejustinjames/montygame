@@ -36,7 +36,7 @@ public class GameController : MonoBehaviour
     private bool zoomed = false;
     const float BoardSize = 6.2f;   // whole-board view (matches bootstrap)
     const float ZoomSize = 2.8f;    // close-up on the active player
-    const float CamLerp = 4f;       // smoothing speed
+    const float CamLerp = 1.8f;     // smoothing speed (lower = slower, gentler zoom)
 
     private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle;
 
@@ -83,10 +83,10 @@ public class GameController : MonoBehaviour
         Player p = players[current];
         message = $"{p.name} rolled a {roll}!";
 
-        // Zoom in on the active player and follow them
+        // Zoom in on the active player and follow them (slow, gentle)
         followTarget = p.token;
         zoomed = true;
-        yield return new WaitForSeconds(0.45f);
+        yield return new WaitForSeconds(1.1f);
 
         int target = Mathf.Min(p.square + roll, BoardLayout.Squares);
 
@@ -125,10 +125,10 @@ public class GameController : MonoBehaviour
             yield break;
         }
 
-        // Hold on the landing spot, then zoom back out for the next player
-        yield return new WaitForSeconds(0.5f);
+        // Hold on the landing spot, then zoom back out slowly for the next player
+        yield return new WaitForSeconds(0.8f);
         zoomed = false;
-        yield return new WaitForSeconds(0.7f);
+        yield return new WaitForSeconds(1.4f);
 
         current = 1 - current;
         message = $"{players[current].name}'s turn — press ROLL!";
@@ -155,7 +155,7 @@ public class GameController : MonoBehaviour
     {
         Vector3 start = p.token.position;
         Vector3 end = BoardLayout.SquareToWorld(toSquare) + p.offset;
-        float dur = 0.24f, t = 0f;
+        float dur = 0.45f, t = 0f; // slower, easier-to-follow hops
         Vector3 baseScale = p.token.localScale;
         while (t < dur)
         {
