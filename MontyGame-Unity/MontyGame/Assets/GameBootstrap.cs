@@ -26,8 +26,9 @@ public static class GameBootstrap
         CreateGround();
         CreateTiles();
         CreatePlayer();
+        CreateGameManager();
 
-        Debug.Log("✅ GameBootstrap: Scene built! Use ← → to move, SPACE to jump.");
+        Debug.Log("✅ GameBootstrap: Scene built! Press the ROLL button to play.");
     }
 
     // ---- Sprite helper: makes a solid-colour square sprite in code ----
@@ -150,5 +151,13 @@ public static class GameBootstrap
         player.AddComponent<PlayerController>();
 
         Debug.Log("✓ Player created (yellow square) at tile 1");
+    }
+
+    static void CreateGameManager()
+    {
+        // Drives the turn-based board loop (roll -> hop -> tile effect -> win)
+        var gm = new GameObject("_GameManager");
+        gm.AddComponent<GameController>();
+        Debug.Log("✓ GameManager created (ROLL button active)");
     }
 }
