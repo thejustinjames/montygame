@@ -79,14 +79,17 @@ public static class GameBootstrap
         if (tex == null) { Debug.LogWarning("⚠ backdrop not found in Resources"); return; }
 
         var bg = new GameObject("Background");
-        bg.transform.position = new Vector3(0, 0, 20); // far behind everything
+        // Shifted DOWN + scaled up so the watermarked lower strip of the image
+        // sits below the visible frame — only clean galaxy (top) + jungle canopy
+        // (bottom) remain on screen.
+        bg.transform.position = new Vector3(0, -5f, 20);
         var sr = bg.AddComponent<SpriteRenderer>();
         sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
                                   new Vector2(0.5f, 0.5f), 100);
         sr.sortingOrder = -100; // behind board, tokens, everything
 
         // scale to COVER the whole play area (board + zoom margin), no distortion
-        const float need = 26f;
+        const float need = 32f;
         Vector3 s = sr.sprite.bounds.size;
         float scale = Mathf.Max(need / s.x, need / s.y);
         bg.transform.localScale = new Vector3(scale, scale, 1);
