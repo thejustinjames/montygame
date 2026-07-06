@@ -19,6 +19,7 @@ public static class GameBootstrap
 
         CleanupOldObjects();
         CreateCamera();
+        CreateBackground();
         CreateSquares();
         CreateConnectors();
         CreateCollectibles();
@@ -47,8 +48,9 @@ public static class GameBootstrap
         {
             string n = go.name;
             if (n == "Player" || n == "Ground" || n == "_Setup" || n == "_GameManager" ||
-                n.StartsWith("Token") || n.StartsWith("Tile_") || n.StartsWith("Label_") ||
-                n.StartsWith("Sq_") || n.StartsWith("Link_") || n.StartsWith("Star_"))
+                n == "Background" || n.StartsWith("Token") || n.StartsWith("Tile_") ||
+                n.StartsWith("Label_") || n.StartsWith("Sq_") || n.StartsWith("Link_") ||
+                n.StartsWith("Star_"))
             {
                 Object.Destroy(go);
             }
@@ -71,6 +73,26 @@ public static class GameBootstrap
         Debug.Log("✓ Camera framed on board");
     }
 
+    static void CreateBackground()
+    {
+        var tex = Resources.Load<Texture2D>("backdrop");
+        if (tex == null) { Debug.LogWarning("⚠ backdrop not found in Resources"); return; }
+
+        var bg = new GameObject("Background");
+        bg.transform.position = new Vector3(0, 0, 20); // far behind everything
+        var sr = bg.AddComponent<SpriteRenderer>();
+        sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                  new Vector2(0.5f, 0.5f), 100);
+        sr.sortingOrder = -100; // behind board, tokens, everything
+
+        // scale to COVER the whole play area (board + zoom margin), no distortion
+        const float need = 26f;
+        Vector3 s = sr.sprite.bounds.size;
+        float scale = Mathf.Max(need / s.x, need / s.y);
+        bg.transform.localScale = new Vector3(scale, scale, 1);
+        Debug.Log("✓ Jungle background placed");
+    }
+
     static void CreateSquares()
     {
         for (int n = 1; n <= BoardLayout.Squares; n++)
@@ -82,7 +104,9 @@ public static class GameBootstrap
             sq.transform.localScale = new Vector3(BoardLayout.Cell * 0.94f, BoardLayout.Cell * 0.94f, 1);
 
             var sr = sq.AddComponent<SpriteRenderer>();
-            sr.sprite = MakeSquareSprite(SquareColor(n));
+            Color c = SquareColor(n);
+            c.a = 0.82f; // let the jungle glow through a little
+            sr.sprite = MakeSquareSprite(c);
             sr.sortingOrder = 0;
 
             // number label
