@@ -96,44 +96,58 @@ public static class GameBootstrap
         Debug.Log("✓ Jungle background placed");
     }
 
+    static Sprite tileCosmic, tileJungle;
+
+    static Sprite LoadTileSprite(string name)
+    {
+        var tex = Resources.Load<Texture2D>(name);
+        if (tex == null) return null;
+        // pixelsPerUnit = width -> the whole tile (body + shadow padding) is 1 cell,
+        // so the visible body is ~0.75 cell and neighbours have gaps = they "float"
+        return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                             new Vector2(0.5f, 0.5f), tex.width);
+    }
+
     static void CreateSquares()
     {
+        tileCosmic = LoadTileSprite("tile_cosmic");
+        tileJungle = LoadTileSprite("tile_jungle");
+
         for (int n = 1; n <= BoardLayout.Squares; n++)
         {
             Vector3 pos = BoardLayout.SquareToWorld(n);
+            int row = (n - 1) / BoardLayout.Grid;
+            int col = (n - 1) % BoardLayout.Grid;
+            bool cosmic = (row + col) % 2 == 0;
 
             var sq = new GameObject($"Sq_{n}");
             sq.transform.position = pos;
-            sq.transform.localScale = new Vector3(BoardLayout.Cell * 0.94f, BoardLayout.Cell * 0.94f, 1);
 
             var sr = sq.AddComponent<SpriteRenderer>();
-            Color c = SquareColor(n);
-            c.a = 0.82f; // let the jungle glow through a little
-            sr.sprite = MakeSquareSprite(c);
+            Sprite s = cosmic ? tileCosmic : tileJungle;
+            sr.sprite = s != null ? s : MakeSquareSprite(cosmic ? new Color(0.2f, 0.16f, 0.4f) : new Color(0.2f, 0.4f, 0.2f));
+            sr.color = SpecialTint(n);   // tints ladder/snake/boss squares
             sr.sortingOrder = 0;
 
             // number label
             var label = new GameObject($"Label_{n}");
-            label.transform.position = pos + new Vector3(-0.34f, 0.30f, -1);
+            label.transform.position = pos + new Vector3(-0.30f, 0.28f, -1);
             var tm = label.AddComponent<TextMesh>();
             tm.text = n.ToString();
             tm.characterSize = 0.07f;
             tm.fontSize = 48;
-            tm.color = new Color(1f, 1f, 1f, 0.75f);
+            tm.color = new Color(1f, 1f, 1f, 0.85f);
         }
-        Debug.Log("✓ 100 squares created");
+        Debug.Log("✓ 100 floating cosmic/jungle tiles created");
     }
 
-    static Color SquareColor(int n)
+    // Multiplicative tint to flag special squares (white = normal tile)
+    static Color SpecialTint(int n)
     {
-        if (n == BoardLayout.Boss) return new Color(0.80f, 0.15f, 0.15f);          // boss red
-        if (BoardLayout.Ladders.ContainsKey(n)) return new Color(0.20f, 0.55f, 0.30f); // ladder base green
-        if (BoardLayout.Snakes.ContainsKey(n)) return new Color(0.55f, 0.25f, 0.55f);  // snake head purple
-        // checkerboard of two calm blues
-        int row = (n - 1) / BoardLayout.Grid;
-        int col = (n - 1) % BoardLayout.Grid;
-        bool even = (row + col) % 2 == 0;
-        return even ? new Color(0.17f, 0.24f, 0.34f) : new Color(0.22f, 0.30f, 0.42f);
+        if (n == BoardLayout.Boss) return new Color(1f, 0.45f, 0.45f);            // boss red
+        if (BoardLayout.Ladders.ContainsKey(n)) return new Color(0.75f, 1f, 0.5f); // ladder yellow-green
+        if (BoardLayout.Snakes.ContainsKey(n)) return new Color(1f, 0.6f, 1f);     // snake pink
+        return Color.white;
     }
 
     static Material LineMaterial()
