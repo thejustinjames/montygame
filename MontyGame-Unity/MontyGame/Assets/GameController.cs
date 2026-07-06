@@ -3,127 +3,146 @@ using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// Turn-based Snakes-&-Ladders game loop over the 100-square board.
-/// Mirrors MontyGame.Core's rules: roll 1-6, walk square-to-square, take
-/// ladders up / snakes down (once), collect stars, reach 100 to face the boss
-/// and win. Draws its own ROLL button + HUD with IMGUI (no editor setup).
+/// Two-player (pass-and-play) Snakes-&-Ladders loop over the 100-square board.
+/// Dino and Cat take turns: roll 1-6, walk square-to-square, take ladders up /
+/// snakes down (once), grab stars (first to land takes it), first to 100 wins.
+/// Draws its own ROLL button + HUD with IMGUI (no editor setup).
 /// </summary>
 public class GameController : MonoBehaviour
 {
-    private Transform token;
-    private int square = 1;
-    private int stars = 0;
+    class Player
+    {
+        public string name;
+        public Transform token;
+        public Vector3 offset;
+        public Color color;
+        public int square = 1;
+        public int stars = 0;
+    }
+
+    private Player[] players;
+    private int current = 0;             // whose turn
     private int lastRoll = 0;
     private bool busy = false;
     private bool won = false;
-    private string message = "Help Dino climb to 100 and beat the boss!";
-    private readonly HashSet<int> collected = new HashSet<int>();
+    private int winner = -1;
+    private string message = "Dino goes first — press ROLL!";
+    private readonly HashSet<int> starsTaken = new HashSet<int>();
     private readonly System.Random rng = new System.Random();
 
-    private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle;
+    private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle;
 
     IEnumerator Start()
     {
         yield return null; // let the board finish building
-        var t = GameObject.FindWithTag("Player");
-        token = t.transform;
-        square = 1;
-        token.position = BoardLayout.SquareToWorld(1) + new Vector3(0, 0, -2);
+
+        players = new[]
+        {
+            new Player { name = "Dino", token = GameObject.Find("Token_0").transform,
+                         offset = new Vector3(-0.20f, 0.12f, -2.0f), color = new Color(1f, 0.85f, 0.2f) },
+            new Player { name = "Cat",  token = GameObject.Find("Token_1").transform,
+                         offset = new Vector3(0.20f, -0.12f, -2.1f), color = new Color(0.3f, 0.85f, 0.9f) },
+        };
+        foreach (var p in players) PlaceToken(p);
+    }
+
+    void PlaceToken(Player p)
+    {
+        p.token.position = BoardLayout.SquareToWorld(p.square) + p.offset;
     }
 
     IEnumerator DoTurn(int roll)
     {
         busy = true;
         lastRoll = roll;
-        message = $"Rolled a {roll}!";
+        Player p = players[current];
+        message = $"{p.name} rolled a {roll}!";
 
-        int target = Mathf.Min(square + roll, BoardLayout.Squares);
+        int target = Mathf.Min(p.square + roll, BoardLayout.Squares);
 
-        // walk one square at a time
-        while (square < target)
+        while (p.square < target)
         {
-            yield return Hop(square + 1);
-            square++;
-            TryCollect(square);
+            yield return HopTo(p, p.square + 1);
+            p.square++;
+            TryCollect(p, p.square);
         }
 
-        // ladder or snake (applied once)
-        if (BoardLayout.Ladders.TryGetValue(square, out int up))
+        if (BoardLayout.Ladders.TryGetValue(p.square, out int up))
         {
-            message = "Time Portal! Zoom UP!";
+            message = $"{p.name} hits a Time Portal — zoom UP!";
             yield return new WaitForSeconds(0.35f);
-            yield return HopTo(up);
-            square = up;
-            TryCollect(square);
+            yield return HopTo(p, up);
+            p.square = up;
+            TryCollect(p, p.square);
         }
-        else if (BoardLayout.Snakes.TryGetValue(square, out int down))
+        else if (BoardLayout.Snakes.TryGetValue(p.square, out int down))
         {
-            message = "Whirlpool! Swept back down!";
+            message = $"{p.name} hits a Whirlpool — swept down!";
             yield return new WaitForSeconds(0.35f);
-            yield return HopTo(down);
-            square = down;
+            yield return HopTo(p, down);
+            p.square = down;
         }
 
-        // win / boss
-        if (square >= BoardLayout.Boss)
+        if (p.square >= BoardLayout.Boss)
         {
-            message = "BOSS! Dino dodges the T-Rex...";
+            message = $"{p.name} reaches the BOSS! Dodging the T-Rex...";
             yield return new WaitForSeconds(0.8f);
             won = true;
-            message = $"VICTORY! Reached 100 with {stars} stars. Dino is home!";
-        }
-        else
-        {
-            message = $"On square {square}. Roll again!";
+            winner = current;
+            message = $"🏆 {p.name} WINS with {p.stars} stars! 🏆";
+            busy = false;
+            yield break;
         }
 
+        // pass to the other player
+        current = 1 - current;
+        message = $"{players[current].name}'s turn — press ROLL!";
         busy = false;
     }
 
-    void TryCollect(int sq)
+    void TryCollect(Player p, int sq)
     {
-        if (BoardLayout.Collectibles.Contains(sq) && !collected.Contains(sq))
+        if (BoardLayout.Collectibles.Contains(sq) && !starsTaken.Contains(sq))
         {
-            collected.Add(sq);
-            stars++;
+            starsTaken.Add(sq);
+            p.stars++;
             var star = GameObject.Find($"Star_{sq}");
             if (star != null)
             {
                 var sr = star.GetComponent<SpriteRenderer>();
-                if (sr != null) sr.enabled = false; // hide but keep findable
+                if (sr != null) sr.enabled = false;
             }
-            message = $"Collected a star!  ({stars} total)";
+            message = $"{p.name} grabbed a star!  ({p.stars})";
         }
     }
 
-    IEnumerator Hop(int toSquare) { yield return HopTo(toSquare); }
-
-    IEnumerator HopTo(int toSquare)
+    IEnumerator HopTo(Player p, int toSquare)
     {
-        Vector3 start = token.position;
-        Vector3 end = BoardLayout.SquareToWorld(toSquare) + new Vector3(0, 0, -2);
+        Vector3 start = p.token.position;
+        Vector3 end = BoardLayout.SquareToWorld(toSquare) + p.offset;
         float dur = 0.16f, t = 0f;
-        Vector3 baseScale = token.localScale;
+        Vector3 baseScale = p.token.localScale;
         while (t < dur)
         {
             t += Time.deltaTime;
             float f = t / dur;
-            token.position = Vector3.Lerp(start, end, f);
-            token.localScale = baseScale * (1f + 0.25f * Mathf.Sin(f * Mathf.PI)); // little pop
+            p.token.position = Vector3.Lerp(start, end, f);
+            p.token.localScale = baseScale * (1f + 0.25f * Mathf.Sin(f * Mathf.PI));
             yield return null;
         }
-        token.position = end;
-        token.localScale = baseScale;
+        p.token.position = end;
+        p.token.localScale = baseScale;
     }
 
     void EnsureStyles()
     {
         if (labelStyle != null) return;
-        labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
+        labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 19, fontStyle = FontStyle.Bold };
         labelStyle.normal.textColor = Color.white;
-        bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold };
+        turnStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
+        bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold };
         bigStyle.normal.textColor = new Color(1f, 0.9f, 0.3f);
-        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 24, fontStyle = FontStyle.Bold };
+        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
         boxStyle = new GUIStyle(GUI.skin.box);
         var tex = new Texture2D(1, 1);
         tex.SetPixel(0, 0, new Color(0, 0, 0, 0.6f));
@@ -134,22 +153,31 @@ public class GameController : MonoBehaviour
     void OnGUI()
     {
         EnsureStyles();
+        if (players == null) return;
 
-        GUI.Box(new Rect(15, 15, 360, 120), GUIContent.none, boxStyle);
-        GUI.Label(new Rect(28, 22, 340, 30), $"Square {square} / 100    ⭐ {stars}", labelStyle);
-        string roll = lastRoll > 0 ? $"Dice: {lastRoll}" : "";
-        GUI.Label(new Rect(28, 50, 340, 30), roll, labelStyle);
-        GUI.Label(new Rect(28, 78, 340, 50), message, labelStyle);
+        GUI.Box(new Rect(15, 15, 380, 150), GUIContent.none, boxStyle);
+
+        // per-player status
+        for (int i = 0; i < players.Length; i++)
+        {
+            var p = players[i];
+            turnStyle.normal.textColor = p.color;
+            string arrow = (i == current && !won) ? "▶ " : "   ";
+            GUI.Label(new Rect(28, 22 + i * 28, 360, 28),
+                      $"{arrow}{p.name}:  square {p.square}   ⭐ {p.stars}", turnStyle);
+        }
+
+        GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
 
         if (!busy && !won)
         {
-            if (GUI.Button(new Rect(15, 145, 200, 60), "ROLL  🎲", buttonStyle))
+            string who = players[current].name;
+            if (GUI.Button(new Rect(15, 172, 250, 55), $"{who}: ROLL  🎲", buttonStyle))
                 StartCoroutine(DoTurn(rng.Next(1, 7)));
         }
         else if (won)
         {
-            GUI.Label(new Rect(15, 145, 360, 40), "🏆 YOU WIN! 🏆", bigStyle);
-            if (GUI.Button(new Rect(15, 190, 200, 55), "PLAY AGAIN  ▶", buttonStyle))
+            if (GUI.Button(new Rect(15, 172, 250, 55), "PLAY AGAIN  ▶", buttonStyle))
                 ResetGame();
         }
     }
@@ -158,11 +186,11 @@ public class GameController : MonoBehaviour
     {
         won = false;
         busy = false;
+        winner = -1;
         lastRoll = 0;
-        square = 1;
-        stars = 0;
-        collected.Clear();
-        token.position = BoardLayout.SquareToWorld(1) + new Vector3(0, 0, -2);
+        current = 0;
+        starsTaken.Clear();
+        foreach (var p in players) { p.square = 1; p.stars = 0; PlaceToken(p); }
         foreach (int n in BoardLayout.Collectibles)
         {
             var star = GameObject.Find($"Star_{n}");
@@ -172,6 +200,6 @@ public class GameController : MonoBehaviour
                 if (sr != null) sr.enabled = true;
             }
         }
-        message = "Help Dino climb to 100 and beat the boss!";
+        message = "Dino goes first — press ROLL!";
     }
 }

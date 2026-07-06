@@ -22,7 +22,7 @@ public static class GameBootstrap
         CreateSquares();
         CreateConnectors();
         CreateCollectibles();
-        CreateToken();
+        CreateTokens();
         CreateGameManager();
 
         Debug.Log("✅ Board built! Press ROLL to climb to 100 and beat the boss.");
@@ -47,7 +47,7 @@ public static class GameBootstrap
         {
             string n = go.name;
             if (n == "Player" || n == "Ground" || n == "_Setup" || n == "_GameManager" ||
-                n == "Token" || n.StartsWith("Tile_") || n.StartsWith("Label_") ||
+                n.StartsWith("Token") || n.StartsWith("Tile_") || n.StartsWith("Label_") ||
                 n.StartsWith("Sq_") || n.StartsWith("Link_") || n.StartsWith("Star_"))
             {
                 Object.Destroy(go);
@@ -156,18 +156,24 @@ public static class GameBootstrap
         Debug.Log("✓ Collectibles placed");
     }
 
-    static void CreateToken()
+    static void CreateTokens()
     {
-        var token = new GameObject("Token");
-        token.tag = "Player";
-        token.transform.position = BoardLayout.SquareToWorld(1) + new Vector3(0, 0, -2);
+        // Two players share the board — offset within a square so both are visible
+        CreateToken("Token_0", "Dino", new Vector3(-0.20f, 0.12f, -2.0f), new Color(1f, 0.85f, 0.2f));
+        CreateToken("Token_1", "Cat", new Vector3(0.20f, -0.12f, -2.1f), new Color(0.3f, 0.85f, 0.9f));
+        Debug.Log("✓ Dino + Cat tokens on square 1");
+    }
+
+    static void CreateToken(string objName, string spriteName, Vector3 offset, Color fallback)
+    {
+        var token = new GameObject(objName);
+        token.transform.position = BoardLayout.SquareToWorld(1) + offset;
 
         var sr = token.AddComponent<SpriteRenderer>();
-        sr.sprite = LoadCharacterSprite("Dino");
+        sr.sprite = LoadCharacterSprite(spriteName);
         sr.sortingOrder = 5;
 
-        // scale token to about one square
-        float target = BoardLayout.Cell * 0.8f;
+        float target = BoardLayout.Cell * 0.55f; // smaller so two fit in a square
         if (sr.sprite != null)
         {
             float w = sr.sprite.bounds.size.x;
@@ -175,10 +181,9 @@ public static class GameBootstrap
         }
         else
         {
-            sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.2f));
+            sr.sprite = MakeSquareSprite(fallback);
             token.transform.localScale = Vector3.one * target;
         }
-        Debug.Log("✓ Dino token on square 1");
     }
 
     static Sprite LoadCharacterSprite(string name)
