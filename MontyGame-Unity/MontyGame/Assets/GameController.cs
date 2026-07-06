@@ -61,6 +61,9 @@ public class GameController : MonoBehaviour
         p.token.position = BoardLayout.SquareToWorld(p.square) + p.offset;
     }
 
+    // Random float in [a, b) — used to make hop timing feel human/irregular
+    float RandRange(float a, float b) => a + (float)rng.NextDouble() * (b - a);
+
     void LateUpdate()
     {
         if (cam == null) return;
@@ -95,6 +98,8 @@ public class GameController : MonoBehaviour
             yield return HopTo(p, p.square + 1);
             p.square++;
             TryCollect(p, p.square);
+            // tiny irregular pause, like a hand setting the piece down
+            yield return new WaitForSeconds(RandRange(0.04f, 0.22f));
         }
 
         if (BoardLayout.Ladders.TryGetValue(p.square, out int up))
@@ -155,7 +160,9 @@ public class GameController : MonoBehaviour
     {
         Vector3 start = p.token.position;
         Vector3 end = BoardLayout.SquareToWorld(toSquare) + p.offset;
-        float dur = 0.45f, t = 0f; // slower, easier-to-follow hops
+        // random per-hop duration so movement feels like a real hand, not a machine
+        float dur = RandRange(0.30f, 0.65f);
+        float t = 0f;
         Vector3 baseScale = p.token.localScale;
         while (t < dur)
         {
