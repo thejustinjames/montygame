@@ -163,25 +163,36 @@ public static class GameBootstrap
 
     static void CreateConnectors()
     {
-        foreach (var kv in BoardLayout.Ladders)
-            DrawLink($"Link_L{kv.Key}", kv.Key, kv.Value, new Color(0.35f, 0.85f, 0.45f)); // green up
+        // Ladders: NO lines — the spaceship/Hulk badge + fly-up animation shows the path.
+        // Snakes: an imaginative animated trail — swirling vortex, or a jungle vine (T-Rex).
         foreach (var kv in BoardLayout.Snakes)
-            DrawLink($"Link_S{kv.Key}", kv.Key, kv.Value, new Color(0.85f, 0.45f, 0.85f)); // purple down
-        Debug.Log("✓ Ladder/snake links drawn");
+        {
+            bool vine = BoardLayout.TrexSnakes.Contains(kv.Key);
+            CreateWavyLink($"Link_S{kv.Key}", kv.Key, kv.Value, vine);
+        }
+        Debug.Log("✓ Snake trails drawn (vortex swirls + jungle vine)");
     }
 
-    static void DrawLink(string name, int from, int to, Color color)
+    static void CreateWavyLink(string name, int from, int to, bool vine)
     {
         var obj = new GameObject(name);
         var lr = obj.AddComponent<LineRenderer>();
         lr.material = LineMaterial();
-        lr.startColor = lr.endColor = color;
-        lr.startWidth = lr.endWidth = 0.12f;
-        lr.numCapVertices = 4;
         lr.sortingOrder = 1;
-        lr.positionCount = 2;
-        lr.SetPosition(0, BoardLayout.SquareToWorld(from) + new Vector3(0, 0, -0.5f));
-        lr.SetPosition(1, BoardLayout.SquareToWorld(to) + new Vector3(0, 0, -0.5f));
+
+        var link = obj.AddComponent<WavyLink>();
+        link.a = BoardLayout.SquareToWorld(from);
+        link.b = BoardLayout.SquareToWorld(to);
+        if (vine) // jungle vine for the T-Rex
+        {
+            link.color = new Color(0.35f, 0.72f, 0.30f);
+            link.width = 0.17f; link.amplitude = 0.30f; link.waves = 2.5f; link.speed = 0.8f;
+        }
+        else // meandering, faster-swirling vortex trail
+        {
+            link.color = new Color(0.80f, 0.45f, 0.95f);
+            link.width = 0.12f; link.amplitude = 0.32f; link.waves = 4f; link.speed = 2.4f;
+        }
     }
 
     static void CreateMarkers()
@@ -206,6 +217,9 @@ public static class GameBootstrap
         float target = BoardLayout.Cell * 0.72f;
         float w = sr.sprite.bounds.size.x;
         if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
+
+        // the vortex swirl spins so it reads as a live, moving vortex
+        if (texName == "snake_vortex") go.AddComponent<Spinner>().speed = 80f;
     }
 
     static void CreateCollectibles()
