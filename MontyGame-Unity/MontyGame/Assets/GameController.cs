@@ -47,6 +47,7 @@ public class GameController : MonoBehaviour
 
     private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle, dieBodyStyle, dieNumStyle;
     private Texture2D dieBodyTex, pipTex;
+    private Texture2D[] dieFaces; // realistic die images die_1..die_6
 
     IEnumerator Start()
     {
@@ -260,6 +261,16 @@ public class GameController : MonoBehaviour
             }
         pipTex.Apply();
         pipTex.filterMode = FilterMode.Bilinear;
+
+        // realistic die face images (die_1..die_6 in Resources)
+        dieFaces = new Texture2D[7];
+        for (int i = 1; i <= 6; i++) dieFaces[i] = Resources.Load<Texture2D>($"die_{i}");
+    }
+
+    Texture2D FaceTex(int face)
+    {
+        if (dieFaces != null && face >= 1 && face <= 6) return dieFaces[face];
+        return null;
     }
 
     Rect DieRect()
@@ -291,15 +302,20 @@ public class GameController : MonoBehaviour
     void DrawPipDie(int face, float angle)
     {
         Rect r = DieRect();
+        Texture2D tex = FaceTex(face);
         Matrix4x4 old = GUI.matrix;
         GUIUtility.RotateAroundPivot(angle, r.center);
-        GUI.Box(r, GUIContent.none, dieBodyStyle);         // white die body
-        float pip = r.width * 0.16f;
-        foreach (var p in Pips(face))
+        if (tex != null)
         {
-            var pr = new Rect(r.x + p.x * r.width - pip / 2f,
-                              r.y + p.y * r.height - pip / 2f, pip, pip);
-            GUI.DrawTexture(pr, pipTex);
+            GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, true);
+        }
+        else // fallback if images didn't load
+        {
+            GUI.Box(r, GUIContent.none, dieBodyStyle);
+            float pip = r.width * 0.16f;
+            foreach (var p in Pips(face))
+                GUI.DrawTexture(new Rect(r.x + p.x * r.width - pip / 2f,
+                                         r.y + p.y * r.height - pip / 2f, pip, pip), pipTex);
         }
         GUI.matrix = old;
     }
@@ -310,8 +326,14 @@ public class GameController : MonoBehaviour
         Vector2 ctr = r.center;
         var big = new Rect(ctr.x - r.width * scale / 2f, ctr.y - r.height * scale / 2f,
                            r.width * scale, r.height * scale);
-        GUI.Box(big, GUIContent.none, dieBodyStyle);
-        GUI.Label(big, face.ToString(), dieNumStyle);
+        Texture2D tex = FaceTex(face);
+        if (tex != null)
+            GUI.DrawTexture(big, tex, ScaleMode.ScaleToFit, true);
+        else
+        {
+            GUI.Box(big, GUIContent.none, dieBodyStyle);
+            GUI.Label(big, face.ToString(), dieNumStyle);
+        }
     }
 
     void OnGUI()
