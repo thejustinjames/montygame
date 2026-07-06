@@ -64,6 +64,13 @@ public class GameController : MonoBehaviour
     private static readonly string[] AvatarNames =
         { "Dino", "Cat", "Rex", "Robo", "Rocket", "Star" };
 
+    // --- random flying hazards/bonuses ---
+    class Flyer { public Transform tr; public SpriteRenderer sr; public Vector2 vel; public int type; public float cd; }
+    private readonly System.Collections.Generic.List<Flyer> flyers = new System.Collections.Generic.List<Flyer>();
+    const float FlyBound = 9f;        // roam area around the board
+    const int PteroTarget = 10;       // pterodactyl grabs you back to 10
+    const int ShipTarget = 90;        // spaceship zooms you up to 90
+
     IEnumerator Start()
     {
         yield return null; // let the board finish building
@@ -90,6 +97,89 @@ public class GameController : MonoBehaviour
         selecting = true;
         picking = 0;
         message = "Player 1: choose your character";
+
+        // spawn the random flyers
+        SpawnFlyer(0); SpawnFlyer(0);   // pterodactyls
+        SpawnFlyer(1); SpawnFlyer(1);   // spaceships
+    }
+
+    void SpawnFlyer(int type)
+    {
+        var tex = Resources.Load<Texture2D>(type == 0 ? "fly_ptero" : "fly_ship");
+        var go = new GameObject(type == 0 ? "Flyer_Ptero" : "Flyer_Ship");
+        var sr = go.AddComponent<SpriteRenderer>();
+        if (tex != null)
+            sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), tex.width);
+        sr.sortingOrder = -50; // fly behind the floating tiles
+
+        go.transform.position = new Vector3(RandRange(-FlyBound, FlyBound), RandRange(-FlyBound, FlyBound), 1f);
+        float target = type == 0 ? 1.1f : 1.3f;
+        float w = (sr.sprite != null) ? sr.sprite.bounds.size.x : 1f;
+        if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
+
+        flyers.Add(new Flyer { tr = go.transform, sr = sr, vel = RandomDir() * RandRange(1.5f, 3f), type = type });
+    }
+
+    Vector2 RandomDir()
+    {
+        float a = RandRange(0f, Mathf.PI * 2f);
+        return new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+    }
+
+    void Update()
+    {
+        if (flyers.Count == 0) return;
+
+        foreach (var f in flyers)
+        {
+            f.tr.position += (Vector3)(f.vel * Time.deltaTime);
+            Vector3 p = f.tr.position;
+            bool wrapped = false;
+            if (p.x > FlyBound) { p.x = -FlyBound; wrapped = true; }
+            else if (p.x < -FlyBound) { p.x = FlyBound; wrapped = true; }
+            if (p.y > FlyBound) { p.y = -FlyBound; wrapped = true; }
+            else if (p.y < -FlyBound) { p.y = FlyBound; wrapped = true; }
+            f.tr.position = p;
+            if (wrapped) f.vel = RandomDir() * RandRange(1.5f, 3f); // totally random new heading
+            if (f.sr != null) f.sr.flipX = f.vel.x < 0f;
+            if (f.cd > 0f) f.cd -= Time.deltaTime;
+        }
+
+        // collisions only between turns (never mid-animation / dialog)
+        if (selecting || won || busy || confirmingReset) return;
+        foreach (var f in flyers)
+        {
+            if (f.cd > 0f) continue;
+            foreach (var pl in players)
+            {
+                if (pl.square < 1) continue;
+                if (Vector2.Distance(f.tr.position, pl.token.position) < 0.6f)
+                {
+                    f.cd = 5f;
+                    StartCoroutine(FlyerHit(pl, f.type));
+                    return; // one hit at a time
+                }
+            }
+        }
+    }
+
+    IEnumerator FlyerHit(Player pl, int type)
+    {
+        busy = true;
+        int target = type == 0 ? PteroTarget : ShipTarget;
+        string tex = type == 0 ? "fly_ptero" : "fly_ship";
+        message = type == 0
+            ? $"A pterodactyl grabbed {pl.name} — back to {target}!"
+            : $"A spaceship zoomed {pl.name} up to {target}!";
+        followTarget = pl.token;
+        zoomed = true;
+        yield return new WaitForSeconds(0.7f);
+        yield return CarryTo(pl, target, tex);
+        pl.square = target;
+        yield return new WaitForSeconds(0.5f);
+        zoomed = false;
+        yield return new WaitForSeconds(0.7f);
+        busy = false;
     }
 
     // Give a player the avatar they picked: sets name, token sprite + scale
