@@ -30,6 +30,10 @@ public class GameController : MonoBehaviour
     private readonly HashSet<int> starsTaken = new HashSet<int>();
     private readonly System.Random rng = new System.Random();
 
+    // --- dice roll animation ---
+    private bool rolling = false;
+    private int diceFace = 1;
+
     // --- cinematic camera ---
     private Camera cam;
     private Transform followTarget;
@@ -38,7 +42,8 @@ public class GameController : MonoBehaviour
     const float ZoomSize = 2.8f;    // close-up on the active player
     const float CamLerp = 1.8f;     // smoothing speed (lower = slower, gentler zoom)
 
-    private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle;
+    private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle, dieBodyStyle, dieNumStyle;
+    private Texture2D dieBodyTex;
 
     IEnumerator Start()
     {
@@ -84,9 +89,31 @@ public class GameController : MonoBehaviour
         busy = true;
         lastRoll = roll;
         Player p = players[current];
-        message = $"{p.name} rolled a {roll}!";
 
-        // Zoom in on the active player and follow them (slow, gentle)
+        // 1) Tumble the die (numbers flip fast, then slow down)
+        rolling = true;
+        message = $"{p.name} is rolling...";
+        float elapsed = 0f, step = 0.05f, acc = 0f;
+        while (elapsed < 1.0f)
+        {
+            float dt = Time.deltaTime;
+            elapsed += dt; acc += dt;
+            if (acc >= step)
+            {
+                acc = 0f;
+                diceFace = rng.Next(1, 7);
+                step += 0.012f; // decelerate, like a die settling
+            }
+            yield return null;
+        }
+
+        // 2) Settle on the real number and show it BIG for a moment
+        diceFace = roll;
+        message = $"{p.name} rolled a {roll}!";
+        yield return new WaitForSeconds(1.0f);
+        rolling = false;
+
+        // 3) Zoom in on the active player and follow them (slow, gentle)
         followTarget = p.token;
         zoomed = true;
         yield return new WaitForSeconds(1.1f);
@@ -190,6 +217,25 @@ public class GameController : MonoBehaviour
         tex.SetPixel(0, 0, new Color(0, 0, 0, 0.6f));
         tex.Apply();
         boxStyle.normal.background = tex;
+
+        // big white die face + dark pip number
+        dieBodyTex = new Texture2D(1, 1);
+        dieBodyTex.SetPixel(0, 0, new Color(0.98f, 0.98f, 0.95f, 1f));
+        dieBodyTex.Apply();
+        dieBodyStyle = new GUIStyle(GUI.skin.box);
+        dieBodyStyle.normal.background = dieBodyTex;
+        dieNumStyle = new GUIStyle(GUI.skin.label)
+        { fontSize = 130, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        dieNumStyle.normal.textColor = new Color(0.15f, 0.15f, 0.2f);
+    }
+
+    void DrawDie()
+    {
+        float size = Mathf.Min(Screen.width, Screen.height) * 0.30f;
+        float cx = Screen.width * 0.5f, cy = Screen.height * 0.42f;
+        var r = new Rect(cx - size / 2f, cy - size / 2f, size, size);
+        GUI.Box(r, GUIContent.none, dieBodyStyle);
+        GUI.Label(r, diceFace.ToString(), dieNumStyle);
     }
 
     void OnGUI()
@@ -222,6 +268,9 @@ public class GameController : MonoBehaviour
             if (GUI.Button(new Rect(15, 172, 250, 55), "PLAY AGAIN  ▶", buttonStyle))
                 ResetGame();
         }
+
+        // big rolling die, drawn last so it's on top
+        if (rolling) DrawDie();
     }
 
     void ResetGame()
