@@ -56,6 +56,7 @@ public class GameController : MonoBehaviour
 
     // --- character select gallery ---
     private bool selecting = true;      // true until both players have picked
+    private bool confirmingReset = false; // showing the "start a new game?" prompt
     private int picking = 0;            // which player is currently choosing
     private readonly int[] chosen = { -1, -1 }; // avatar index each player picked
     private const int AvatarCount = 6;
@@ -475,7 +476,7 @@ public class GameController : MonoBehaviour
 
         GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
 
-        if (!busy && !won)
+        if (!busy && !won && !confirmingReset)
         {
             string who = players[current].name;
             if (GUI.Button(new Rect(15, 172, 250, 55), $"{who}: ROLL  🎲", buttonStyle))
@@ -499,8 +500,34 @@ public class GameController : MonoBehaviour
         float w = 150f, h = 44f, m = 15f;
         var newRect = new Rect(Screen.width - w - m, m, w, h);
         var quitRect = new Rect(Screen.width - w - m, m + h + 8f, w, h);
-        if (GUI.Button(newRect, "NEW GAME", buttonStyle)) ResetGame();
-        if (GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
+        if (!confirmingReset && GUI.Button(newRect, "NEW GAME", buttonStyle)) confirmingReset = true;
+        if (!confirmingReset && GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
+        DrawConfirm();
+    }
+
+    void DrawConfirm()
+    {
+        if (!confirmingReset) return;
+
+        Color oc = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.65f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = oc;
+
+        float w = 470f, h = 220f;
+        var box = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+        GUI.Box(box, GUIContent.none, boxStyle);
+
+        var t = new GUIStyle(GUI.skin.label)
+        { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        t.normal.textColor = Color.white;
+        GUI.Label(new Rect(box.x, box.y + 30, w, 40), "Start a new game?", t);
+
+        float bw = 175f, bh = 58f, gap = 28f;
+        var yes = new Rect(box.center.x - bw - gap / 2f, box.yMax - 86f, bw, bh);
+        var no = new Rect(box.center.x + gap / 2f, box.yMax - 86f, bw, bh);
+        if (GUI.Button(yes, "YES", buttonStyle)) { confirmingReset = false; ResetGame(); }
+        if (GUI.Button(no, "NO", buttonStyle)) { confirmingReset = false; }
     }
 
     void QuitGame()
@@ -563,7 +590,7 @@ public class GameController : MonoBehaviour
             GUI.Label(new Rect(r.x, r.yMax - 26, cell, 24),
                       takenByP1 ? "TAKEN" : AvatarNames[idx], nameStyle);
 
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !takenByP1)
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !takenByP1 && !confirmingReset)
                 PickAvatar(i);
 
             GUI.enabled = true;
@@ -579,6 +606,7 @@ public class GameController : MonoBehaviour
         current = 0;
         zoomed = false;
         followTarget = null;
+        confirmingReset = false;
         // back to character select for a fresh game
         selecting = true;
         picking = 0;
