@@ -38,6 +38,9 @@ public class GameController : MonoBehaviour
     private float popScale = 1f;    // number pop bounce
     private Vector2 diePos;         // die screen position while tumbling
     private float dieScale = 1f;    // grows at bounce apex (fake 3D)
+    private float dieHeight = 0f;   // 0 = on ground, 1 = bounce apex
+    private float dieGroundY = 0f;  // resting baseline for the shadow
+    private float dieSquash = 0f;   // +squash (wide/short), -stretch (tall/thin)
 
     // --- cinematic camera ---
     private Camera cam;
@@ -48,7 +51,7 @@ public class GameController : MonoBehaviour
     const float CamLerp = 1.8f;     // smoothing speed (lower = slower, gentler zoom)
 
     private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle, dieBodyStyle, dieNumStyle;
-    private Texture2D dieBodyTex, pipTex;
+    private Texture2D dieBodyTex, pipTex, shadowTex;
     private Texture2D[] dieFaces; // realistic die images die_1..die_6
 
     IEnumerator Start()
@@ -99,32 +102,44 @@ public class GameController : MonoBehaviour
         // 1) Throw the die: it tumbles + bounces across the screen, then settles
         rolling = true;
         message = $"{p.name} is rolling...";
-        float rollTime = 2.6f;
+        float rollTime = 2.8f;
         float cy = Screen.height * 0.42f;
-        // a couple of random start/mid points so each throw travels differently
-        float startX = Screen.width * (0.15f + 0.1f * (float)rng.NextDouble());
-        float endX = Screen.width * 0.5f;
+        dieGroundY = cy;
+        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        float margin = baseSize * 0.7f;
+        float L = margin, Rw = Screen.width - margin;
+        float startOff = (float)rng.NextDouble() * (Rw - L);
         float spinDir = rng.Next(0, 2) == 0 ? 1f : -1f;
+        float bounces = 4f;                                   // more, further bounces
         float elapsed = 0f, step = 0.10f, acc = 0f;
         while (elapsed < rollTime)
         {
             float dt = Time.deltaTime;
             elapsed += dt; acc += dt;
             float prog = elapsed / rollTime;
-            float ease = 1f - Mathf.Pow(1f - prog, 2f);      // ease-out travel
+            float ease = 1f - Mathf.Pow(1f - prog, 2f);       // ease-out travel
 
-            // travel left->center with 3 decaying bounces
-            float bounce = Mathf.Abs(Mathf.Sin(prog * Mathf.PI * 3f)) * (1f - prog);
-            diePos = new Vector2(Mathf.Lerp(startX, endX, ease),
-                                 cy - bounce * Screen.height * 0.20f);
-            dieScale = 1f + bounce * 0.35f;                  // bigger at apex = 3D pop
-            dieAngle += spinDir * 900f * dt * (0.3f + (1f - prog)); // spin, slowing
+            // horizontal: zip across, bouncing off the walls (ping-pong), then settle center
+            float travel = (Rw - L) * 2.6f * ease;            // travels much further
+            float pingX = L + Mathf.PingPong(startOff + spinDir * travel, Rw - L);
+            float settle = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.78f, 1f, prog));
+            float x = Mathf.Lerp(pingX, Screen.width * 0.5f, settle);
+
+            // vertical bounces, decaying to the ground
+            float h = Mathf.Abs(Mathf.Sin(prog * Mathf.PI * bounces)) * (1f - prog);
+            dieHeight = h;
+            diePos = new Vector2(x, cy - h * Screen.height * 0.22f);
+
+            dieScale = 1f + h * 0.30f;                          // bigger up high = 3D
+            // squash on landing (h~0), slight stretch when rising
+            dieSquash = Mathf.Clamp01(1f - h * 5f) * 0.5f - Mathf.Clamp01(h) * 0.12f;
+            dieAngle += spinDir * 1000f * dt * (0.3f + (1f - prog)); // spin, slowing
 
             if (acc >= step)
             {
                 acc = 0f;
                 diceFace = rng.Next(1, 7);
-                step += 0.025f; // faces change slower and slower
+                step += 0.02f;
             }
             yield return null;
         }
@@ -133,6 +148,8 @@ public class GameController : MonoBehaviour
         diceFace = roll;
         dieAngle = 0f;
         dieScale = 1f;
+        dieHeight = 0f;
+        dieSquash = 0f;
         diePos = new Vector2(Screen.width * 0.5f, cy);
         yield return new WaitForSeconds(0.9f);
         rolling = false;
@@ -283,6 +300,7 @@ public class GameController : MonoBehaviour
         // realistic die face images (die_1..die_6 in Resources)
         dieFaces = new Texture2D[7];
         for (int i = 1; i <= 6; i++) dieFaces[i] = Resources.Load<Texture2D>($"die_{i}");
+        shadowTex = Resources.Load<Texture2D>("dieshadow");
     }
 
     Texture2D FaceTex(int face)
@@ -317,12 +335,29 @@ public class GameController : MonoBehaviour
         }
     }
 
+    void DrawDieShadow()
+    {
+        if (shadowTex == null) return;
+        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        // small & dark when grounded, big & faint when high in the air
+        float w = baseSize * Mathf.Lerp(1.05f, 0.55f, dieHeight);
+        float hgt = w * 0.30f;
+        float alpha = Mathf.Lerp(0.42f, 0.12f, dieHeight);
+        var sr = new Rect(diePos.x - w / 2f, dieGroundY + baseSize * 0.48f - hgt / 2f, w, hgt);
+        Color old = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, alpha);
+        GUI.DrawTexture(sr, shadowTex);
+        GUI.color = old;
+    }
+
     void DrawPipDie(int face, float angle)
     {
-        // draw at the current tumble position/scale (moves across the screen)
+        // draw at the current tumble position/scale, with squash-and-stretch
         float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
         float size = baseSize * dieScale;
-        Rect r = new Rect(diePos.x - size / 2f, diePos.y - size / 2f, size, size);
+        float w = size * (1f + 0.30f * dieSquash);   // wider when squashed
+        float hgt = size * (1f - 0.30f * dieSquash); // shorter when squashed
+        Rect r = new Rect(diePos.x - w / 2f, diePos.y - hgt / 2f, w, hgt);
         Texture2D tex = FaceTex(face);
         Matrix4x4 old = GUI.matrix;
         GUIUtility.RotateAroundPivot(angle, r.center);
@@ -388,8 +423,8 @@ public class GameController : MonoBehaviour
                 ResetGame();
         }
 
-        // drawn last so it's on top: tumbling pip die, then the number pop
-        if (rolling) DrawPipDie(diceFace, dieAngle);
+        // drawn last so it's on top: shadow + tumbling die, then the number pop
+        if (rolling) { DrawDieShadow(); DrawPipDie(diceFace, dieAngle); }
         else if (popping) DrawNumberPop(diceFace, popScale);
     }
 
