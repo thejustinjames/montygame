@@ -36,6 +36,8 @@ public class GameController : MonoBehaviour
     private int diceFace = 1;
     private float dieAngle = 0f;    // tumble rotation
     private float popScale = 1f;    // number pop bounce
+    private Vector2 diePos;         // die screen position while tumbling
+    private float dieScale = 1f;    // grows at bounce apex (fake 3D)
 
     // --- cinematic camera ---
     private Camera cam;
@@ -94,28 +96,44 @@ public class GameController : MonoBehaviour
         lastRoll = roll;
         Player p = players[current];
 
-        // 1) Tumble the pip die slowly so little kids can watch each face
+        // 1) Throw the die: it tumbles + bounces across the screen, then settles
         rolling = true;
         message = $"{p.name} is rolling...";
-        float rollTime = 2.4f;
-        float elapsed = 0f, step = 0.14f, acc = 0f;
+        float rollTime = 2.6f;
+        float cy = Screen.height * 0.42f;
+        // a couple of random start/mid points so each throw travels differently
+        float startX = Screen.width * (0.15f + 0.1f * (float)rng.NextDouble());
+        float endX = Screen.width * 0.5f;
+        float spinDir = rng.Next(0, 2) == 0 ? 1f : -1f;
+        float elapsed = 0f, step = 0.10f, acc = 0f;
         while (elapsed < rollTime)
         {
             float dt = Time.deltaTime;
             elapsed += dt; acc += dt;
-            dieAngle += 360f * dt * (1f - elapsed / rollTime); // gentle spin, slowing
+            float prog = elapsed / rollTime;
+            float ease = 1f - Mathf.Pow(1f - prog, 2f);      // ease-out travel
+
+            // travel left->center with 3 decaying bounces
+            float bounce = Mathf.Abs(Mathf.Sin(prog * Mathf.PI * 3f)) * (1f - prog);
+            diePos = new Vector2(Mathf.Lerp(startX, endX, ease),
+                                 cy - bounce * Screen.height * 0.20f);
+            dieScale = 1f + bounce * 0.35f;                  // bigger at apex = 3D pop
+            dieAngle += spinDir * 900f * dt * (0.3f + (1f - prog)); // spin, slowing
+
             if (acc >= step)
             {
                 acc = 0f;
                 diceFace = rng.Next(1, 7);
-                step += 0.03f; // faces change slower and slower
+                step += 0.025f; // faces change slower and slower
             }
             yield return null;
         }
 
-        // 2) Settle flat on the rolled face for a good beat
+        // 2) Settle flat and centered on the rolled face for a good beat
         diceFace = roll;
         dieAngle = 0f;
+        dieScale = 1f;
+        diePos = new Vector2(Screen.width * 0.5f, cy);
         yield return new WaitForSeconds(0.9f);
         rolling = false;
 
@@ -301,7 +319,10 @@ public class GameController : MonoBehaviour
 
     void DrawPipDie(int face, float angle)
     {
-        Rect r = DieRect();
+        // draw at the current tumble position/scale (moves across the screen)
+        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        float size = baseSize * dieScale;
+        Rect r = new Rect(diePos.x - size / 2f, diePos.y - size / 2f, size, size);
         Texture2D tex = FaceTex(face);
         Matrix4x4 old = GUI.matrix;
         GUIUtility.RotateAroundPivot(angle, r.center);
