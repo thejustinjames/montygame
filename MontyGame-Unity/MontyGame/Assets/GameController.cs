@@ -16,7 +16,7 @@ public class GameController : MonoBehaviour
         public Transform token;
         public Vector3 offset;
         public Color color;
-        public int square = 1;
+        public int square = 0;   // 0 = off the board, waiting to roll on
         public int stars = 0;
     }
 
@@ -72,7 +72,14 @@ public class GameController : MonoBehaviour
 
     void PlaceToken(Player p)
     {
-        p.token.position = BoardLayout.SquareToWorld(p.square) + p.offset;
+        p.token.position = WorldForSquare(p.square) + p.offset;
+    }
+
+    // World position for a square; squares < 1 sit just off the board below the start
+    Vector3 WorldForSquare(int sq)
+    {
+        if (sq < 1) return BoardLayout.SquareToWorld(1) + new Vector3(0f, -1.25f, 0f);
+        return BoardLayout.SquareToWorld(sq);
     }
 
     // Random float in [a, b) — used to make hop timing feel human/irregular
@@ -405,8 +412,9 @@ public class GameController : MonoBehaviour
             var p = players[i];
             turnStyle.normal.textColor = p.color;
             string arrow = (i == current && !won) ? "▶ " : "   ";
+            string where = p.square < 1 ? "start" : $"square {p.square}";
             GUI.Label(new Rect(28, 22 + i * 28, 360, 28),
-                      $"{arrow}{p.name}:  square {p.square}   ⭐ {p.stars}", turnStyle);
+                      $"{arrow}{p.name}:  {where}   ⭐ {p.stars}", turnStyle);
         }
 
         GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
@@ -438,7 +446,7 @@ public class GameController : MonoBehaviour
         zoomed = false;
         followTarget = null;
         starsTaken.Clear();
-        foreach (var p in players) { p.square = 1; p.stars = 0; PlaceToken(p); }
+        foreach (var p in players) { p.square = 0; p.stars = 0; PlaceToken(p); }
         foreach (int n in BoardLayout.Collectibles)
         {
             var star = GameObject.Find($"Star_{n}");

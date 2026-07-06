@@ -21,7 +21,8 @@ public static class BoardLayout
     // Ladders / Portals: land on the key -> zoom UP to the value.
     public static readonly Dictionary<int, int> Ladders = new Dictionary<int, int>
     {
-        { 3, 22 }, { 8, 26 }, { 20, 41 }, { 28, 77 },
+        { 1, 20 },  // square 1 is a ladder straight up one row
+        { 3, 22 }, { 8, 26 }, { 28, 77 },
         { 36, 57 }, { 51, 72 }, { 71, 92 },
     };
 

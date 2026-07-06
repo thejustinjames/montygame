@@ -194,7 +194,8 @@ public static class GameBootstrap
     static void CreateToken(string objName, string spriteName, Vector3 offset, Color fallback)
     {
         var token = new GameObject(objName);
-        token.transform.position = BoardLayout.SquareToWorld(1) + offset;
+        // start just off the board, below square 1
+        token.transform.position = BoardLayout.SquareToWorld(1) + new Vector3(0f, -1.25f, 0f) + offset;
 
         var sr = token.AddComponent<SpriteRenderer>();
         sr.sprite = LoadCharacterSprite(spriteName);
