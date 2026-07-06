@@ -54,6 +54,15 @@ public class GameController : MonoBehaviour
     private Texture2D dieBodyTex, pipTex, shadowTex;
     private Texture2D[] dieFaces; // realistic die images die_1..die_6
 
+    // --- character select gallery ---
+    private bool selecting = true;      // true until both players have picked
+    private int picking = 0;            // which player is currently choosing
+    private readonly int[] chosen = { -1, -1 }; // avatar index each player picked
+    private const int AvatarCount = 6;
+    private Texture2D[] avatarTex;      // avatar_1..avatar_6
+    private static readonly string[] AvatarNames =
+        { "Dino", "Cat", "Rex", "Robo", "Rocket", "Star" };
+
     IEnumerator Start()
     {
         yield return null; // let the board finish building
@@ -68,6 +77,51 @@ public class GameController : MonoBehaviour
         foreach (var p in players) PlaceToken(p);
 
         cam = Camera.main;
+
+        // load avatar gallery images and hide tokens until both players pick
+        avatarTex = new Texture2D[AvatarCount + 1];
+        for (int i = 1; i <= AvatarCount; i++) avatarTex[i] = Resources.Load<Texture2D>($"avatar_{i}");
+        foreach (var p in players)
+        {
+            var sr = p.token.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = false;
+        }
+        selecting = true;
+        picking = 0;
+        message = "Player 1: choose your character";
+    }
+
+    // Give a player the avatar they picked: sets name, token sprite + scale
+    void AssignAvatar(Player p, int avatarIndex)
+    {
+        p.name = AvatarNames[avatarIndex - 1];
+        var tex = avatarTex[avatarIndex];
+        var sr = p.token.GetComponent<SpriteRenderer>();
+        if (sr == null || tex == null) return;
+        sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                  new Vector2(0.5f, 0.5f), tex.width);
+        sr.enabled = true;
+        float target = BoardLayout.Cell * 0.55f;
+        float w = sr.sprite.bounds.size.x;
+        if (w > 0.001f) p.token.localScale = Vector3.one * (target / w);
+    }
+
+    void PickAvatar(int avatarIndex)
+    {
+        if (avatarIndex == chosen[0]) return; // can't pick the same as player 1
+        chosen[picking] = avatarIndex;
+        AssignAvatar(players[picking], avatarIndex);
+        if (picking == 0)
+        {
+            picking = 1;
+            message = "Player 2: choose a different character";
+        }
+        else
+        {
+            selecting = false; // both picked -> start the game
+            current = 0;
+            message = $"{players[0].name} goes first — press ROLL!";
+        }
     }
 
     void PlaceToken(Player p)
@@ -404,6 +458,8 @@ public class GameController : MonoBehaviour
         EnsureStyles();
         if (players == null) return;
 
+        if (selecting) { DrawGallery(); return; }
+
         GUI.Box(new Rect(15, 15, 380, 150), GUIContent.none, boxStyle);
 
         // per-player status
@@ -436,6 +492,64 @@ public class GameController : MonoBehaviour
         else if (popping) DrawNumberPop(diceFace, popScale);
     }
 
+    void DrawGallery()
+    {
+        // dim the board behind the gallery
+        Color oldc = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = oldc;
+
+        var title = new GUIStyle(GUI.skin.label)
+        { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        title.normal.textColor = (picking == 0) ? new Color(1f, 0.85f, 0.2f) : new Color(0.3f, 0.85f, 0.9f);
+        GUI.Label(new Rect(0, Screen.height * 0.08f, Screen.width, 50),
+                  $"Player {picking + 1}: choose your character", title);
+
+        var nameStyle = new GUIStyle(GUI.skin.label)
+        { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        nameStyle.normal.textColor = Color.white;
+
+        // 3 x 2 grid of avatars
+        int cols = 3, rows = 2;
+        float cell = Mathf.Min(Screen.width / 4.2f, Screen.height / 3.4f);
+        float gap = cell * 0.28f;
+        float gridW = cols * cell + (cols - 1) * gap;
+        float gridH = rows * cell + (rows - 1) * gap;
+        float x0 = (Screen.width - gridW) / 2f;
+        float y0 = Screen.height * 0.22f;
+
+        for (int i = 1; i <= AvatarCount; i++)
+        {
+            int idx = i - 1;
+            float cx = x0 + (idx % cols) * (cell + gap);
+            float cy = y0 + (idx / cols) * (cell + gap);
+            var r = new Rect(cx, cy, cell, cell);
+
+            bool takenByP1 = (chosen[0] == i);
+            GUI.enabled = !takenByP1;
+
+            // tile background
+            GUI.color = takenByP1 ? new Color(0.3f, 0.3f, 0.3f, 0.8f) : new Color(1f, 1f, 1f, 0.10f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            if (avatarTex[i] != null)
+            {
+                var pad = cell * 0.12f;
+                GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, cell - 2 * pad, cell - 2 * pad),
+                                avatarTex[i], ScaleMode.ScaleToFit, true);
+            }
+            GUI.Label(new Rect(r.x, r.yMax - 26, cell, 24),
+                      takenByP1 ? "TAKEN" : AvatarNames[idx], nameStyle);
+
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !takenByP1)
+                PickAvatar(i);
+
+            GUI.enabled = true;
+        }
+    }
+
     void ResetGame()
     {
         won = false;
@@ -445,6 +559,16 @@ public class GameController : MonoBehaviour
         current = 0;
         zoomed = false;
         followTarget = null;
+        // back to character select for a fresh game
+        selecting = true;
+        picking = 0;
+        chosen[0] = chosen[1] = -1;
+        foreach (var p in players)
+        {
+            var sr = p.token.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = false;
+        }
+        message = "Player 1: choose your character";
         starsTaken.Clear();
         foreach (var p in players) { p.square = 0; p.stars = 0; PlaceToken(p); }
         foreach (int n in BoardLayout.Collectibles)
