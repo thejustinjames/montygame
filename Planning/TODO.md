@@ -79,11 +79,11 @@ re-ingest, or spec directly):
 - [ ] Create basic scene hierarchy template
 
 ### Core Mechanics Development
-- [ ] **Player Controller:**
-  - [ ] Create player prefab (placeholder sprite)
-  - [ ] Implement gentle platforming physics (jump, fall, collision)
-  - [ ] Test bounce-back on obstacles (no instant death)
-  - [ ] Add walk/run state machine
+- [x] **Player Controller:** ✅ WORKING in Unity (2026-07-06)
+  - [x] Player built in code by `GameBootstrap.cs` (yellow square, no manual setup)
+  - [x] Gentle platforming physics — move (← →) + jump (Space) with coyote-time + jump-buffer
+  - [x] Reliable ground detection (3 downward rays below feet)
+  - [ ] Add walk/run state machine (later, with sprites)
 - [ ] **Movement System:**
   - [ ] Dice roll mechanic (1–6 tiles)
   - [ ] Card draw mechanic (placeholder)
