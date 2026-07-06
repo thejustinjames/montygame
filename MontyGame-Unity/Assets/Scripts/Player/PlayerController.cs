@@ -1,89 +1,76 @@
 using UnityEngine;
 
 /// <summary>
-/// Handles player movement and platforming physics.
-/// Gentle, forgiving design: no instant death, bounce-back on obstacles.
+/// Gentle, forgiving 2D platformer movement for MontyGame.
+/// - Arrow keys / A-D to move
+/// - Space to jump (with coyote-time + jump-buffer grace windows)
+/// Ground is detected with a short raycast so it "just works" on any
+/// collider tagged "Ground" (the bootstrap tags the floor and all tiles).
 /// </summary>
+[RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(BoxCollider2D))]
 public class PlayerController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 6f;
-    [SerializeField] private float groundDrag = 5f;
 
     [Header("Jumping")]
-    [SerializeField] private float jumpForce = 10f;
-    [SerializeField] private float coyoteTime = 0.1f;
-    [SerializeField] private float jumpBuffer = 0.1f;
+    [SerializeField] private float jumpForce = 11f;
+    [SerializeField] private float coyoteTime = 0.12f;
+    [SerializeField] private float jumpBuffer = 0.12f;
 
     private Rigidbody2D rb;
-    private bool isGrounded;
-    private float groundedTimer;
+    private BoxCollider2D box;
+    private float coyoteTimer;
     private float jumpBufferTimer;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
-        if (rb == null)
-        {
-            Debug.LogError("PlayerController requires a Rigidbody2D component!");
-        }
+        box = GetComponent<BoxCollider2D>();
+        rb.freezeRotation = true;
     }
 
     void Update()
     {
-        HandleMovement();
-        HandleJump();
-        UpdateTimers();
-    }
+        // Horizontal movement
+        float input = Input.GetAxisRaw("Horizontal");
+        rb.linearVelocity = new Vector2(input * moveSpeed, rb.linearVelocity.y);
 
-    void HandleMovement()
-    {
-        float input = Input.GetAxis("Horizontal");
-        rb.velocity = new Vector2(input * moveSpeed, rb.velocity.y);
-    }
-
-    void HandleJump()
-    {
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
+        // Jump buffering: remember a jump press for a short window
+        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
             jumpBufferTimer = jumpBuffer;
-        }
+        else
+            jumpBufferTimer -= Time.deltaTime;
 
-        if (jumpBufferTimer > 0 && groundedTimer > 0)
+        // Coyote time: allow a jump shortly after leaving the ground
+        if (IsGrounded())
+            coyoteTimer = coyoteTime;
+        else
+            coyoteTimer -= Time.deltaTime;
+
+        // Execute jump
+        if (jumpBufferTimer > 0f && coyoteTimer > 0f)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
-            jumpBufferTimer = 0;
-            groundedTimer = 0;
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+            jumpBufferTimer = 0f;
+            coyoteTimer = 0f;
         }
     }
 
-    void UpdateTimers()
+    bool IsGrounded()
     {
-        groundedTimer -= Time.deltaTime;
-        jumpBufferTimer -= Time.deltaTime;
+        // Cast a short box just below the player's feet
+        Bounds b = box.bounds;
+        Vector2 origin = new Vector2(b.center.x, b.min.y);
+        Vector2 size = new Vector2(b.size.x * 0.9f, 0.08f);
+        RaycastHit2D hit = Physics2D.BoxCast(origin, size, 0f, Vector2.down, 0.06f);
+        return hit.collider != null && hit.collider.gameObject != gameObject;
     }
 
-    void OnCollisionEnter2D(Collision2D collision)
+    public void SetPosition(Vector3 pos)
     {
-        if (collision.gameObject.CompareTag("Ground"))
-        {
-            groundedTimer = coyoteTime;
-        }
-    }
-
-    void OnCollisionExit2D(Collision2D collision)
-    {
-        if (collision.gameObject.CompareTag("Ground"))
-        {
-            groundedTimer = 0;
-        }
-    }
-
-    public Vector3 GetPosition() => transform.position;
-
-    public void SetPosition(Vector3 newPosition)
-    {
-        transform.position = newPosition;
-        rb.velocity = Vector2.zero;
+        transform.position = pos;
+        rb.linearVelocity = Vector2.zero;
     }
 }
