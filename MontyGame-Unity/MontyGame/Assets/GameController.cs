@@ -30,6 +30,14 @@ public class GameController : MonoBehaviour
     private readonly HashSet<int> starsTaken = new HashSet<int>();
     private readonly System.Random rng = new System.Random();
 
+    // --- cinematic camera ---
+    private Camera cam;
+    private Transform followTarget;
+    private bool zoomed = false;
+    const float BoardSize = 6.2f;   // whole-board view (matches bootstrap)
+    const float ZoomSize = 2.8f;    // close-up on the active player
+    const float CamLerp = 4f;       // smoothing speed
+
     private GUIStyle labelStyle, bigStyle, buttonStyle, boxStyle, turnStyle;
 
     IEnumerator Start()
@@ -44,11 +52,28 @@ public class GameController : MonoBehaviour
                          offset = new Vector3(0.20f, -0.12f, -2.1f), color = new Color(0.3f, 0.85f, 0.9f) },
         };
         foreach (var p in players) PlaceToken(p);
+
+        cam = Camera.main;
     }
 
     void PlaceToken(Player p)
     {
         p.token.position = BoardLayout.SquareToWorld(p.square) + p.offset;
+    }
+
+    void LateUpdate()
+    {
+        if (cam == null) return;
+
+        // Zoomed + following the active token, or pulled back to the whole board
+        Vector3 wantPos = (zoomed && followTarget != null)
+            ? new Vector3(followTarget.position.x, followTarget.position.y, -10f)
+            : new Vector3(0f, 0f, -10f);
+        float wantSize = zoomed ? ZoomSize : BoardSize;
+
+        float k = 1f - Mathf.Exp(-CamLerp * Time.deltaTime); // frame-rate independent
+        cam.transform.position = Vector3.Lerp(cam.transform.position, wantPos, k);
+        cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, wantSize, k);
     }
 
     IEnumerator DoTurn(int roll)
@@ -57,6 +82,11 @@ public class GameController : MonoBehaviour
         lastRoll = roll;
         Player p = players[current];
         message = $"{p.name} rolled a {roll}!";
+
+        // Zoom in on the active player and follow them
+        followTarget = p.token;
+        zoomed = true;
+        yield return new WaitForSeconds(0.45f);
 
         int target = Mathf.Min(p.square + roll, BoardLayout.Squares);
 
@@ -86,15 +116,20 @@ public class GameController : MonoBehaviour
         if (p.square >= BoardLayout.Boss)
         {
             message = $"{p.name} reaches the BOSS! Dodging the T-Rex...";
-            yield return new WaitForSeconds(0.8f);
+            yield return new WaitForSeconds(0.9f);
             won = true;
             winner = current;
             message = $"🏆 {p.name} WINS with {p.stars} stars! 🏆";
+            zoomed = false; // pull back to celebrate on the full board
             busy = false;
             yield break;
         }
 
-        // pass to the other player
+        // Hold on the landing spot, then zoom back out for the next player
+        yield return new WaitForSeconds(0.5f);
+        zoomed = false;
+        yield return new WaitForSeconds(0.7f);
+
         current = 1 - current;
         message = $"{players[current].name}'s turn — press ROLL!";
         busy = false;
@@ -120,7 +155,7 @@ public class GameController : MonoBehaviour
     {
         Vector3 start = p.token.position;
         Vector3 end = BoardLayout.SquareToWorld(toSquare) + p.offset;
-        float dur = 0.16f, t = 0f;
+        float dur = 0.24f, t = 0f;
         Vector3 baseScale = p.token.localScale;
         while (t < dur)
         {
@@ -189,6 +224,8 @@ public class GameController : MonoBehaviour
         winner = -1;
         lastRoll = 0;
         current = 0;
+        zoomed = false;
+        followTarget = null;
         starsTaken.Clear();
         foreach (var p in players) { p.square = 1; p.stars = 0; PlaceToken(p); }
         foreach (int n in BoardLayout.Collectibles)
