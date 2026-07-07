@@ -94,38 +94,75 @@ public static class Sfx
         }
     }
 
-    static void Bass(float[] b, float atSec, float dur, float freq)
+    // A single square/pulse-wave chiptune note (midi < 0 = rest)
+    static void MelNote(float[] b, float atSec, float dur, int midi, float amp, float duty)
     {
+        if (midi < 0) return;
         int start = (int)(atSec * SR);
         int len = (int)(dur * SR);
-        float phase = 0f;
+        float freq = 440f * Mathf.Pow(2f, (midi - 69) / 12f);
+        float ph = 0f;
         for (int i = 0; i < len && start + i < b.Length; i++)
         {
-            float u = (float)i / len;
-            phase += 2f * Mathf.PI * freq / SR;
-            float env = Mathf.Min(1f, Mathf.Min(u * 12f, (1f - u) * 6f) + 0.1f);
-            b[start + i] += (Mathf.Sin(phase) > 0 ? 0.18f : -0.18f) * env; // square-ish bass
+            ph += freq / SR; ph -= (int)ph;                       // 0..1 phase
+            float t = (float)i / SR;
+            float env = Mathf.Min(1f, i / (0.008f * SR))          // attack
+                      * Mathf.Min(1f, (len - i) / (0.03f * SR))   // release
+                      * (0.75f + 0.25f * Mathf.Exp(-t * 2.5f));   // gentle decay
+            b[start + i] += (ph < duty ? 1f : -1f) * amp * env;
         }
     }
 
+    static void Hat(float[] b, float atSec, float amp)
+    {
+        int start = (int)(atSec * SR);
+        int len = (int)(0.03f * SR);
+        for (int i = 0; i < len && start + i < b.Length; i++)
+        {
+            float u = (float)i / len;
+            b[start + i] += (float)(rng.NextDouble() * 2 - 1) * amp * Mathf.Exp(-u * 30f);
+        }
+    }
+
+    // Long 1980s-arcade chiptune loop: pulse melody + square bass + drums.
     static AudioClip BuildBeat()
     {
-        float beat = 60f / 104f;         // ~104 BPM
-        float bar = beat * 4f;
-        float[] b = new float[(int)(bar * 2f * SR)]; // 2 bars
-        for (int barIdx = 0; barIdx < 2; barIdx++)
+        float bpm = 132f;
+        float beat = 60f / bpm;
+        float eighth = beat / 2f;
+
+        // 8-bar melody, one entry per eighth note (-1 = rest)
+        int[] mel = {
+            72,72,79,79,84,84,79,-1,   // bar 1
+            77,77,76,76,74,74,72,-1,   // bar 2
+            79,79,77,77,76,76,74,-1,   // bar 3
+            72,74,76,79,84,-1,-1,-1,   // bar 4
+            81,81,84,84,88,88,84,-1,   // bar 5
+            83,83,81,81,79,79,77,-1,   // bar 6
+            84,84,83,83,81,81,79,-1,   // bar 7
+            76,79,84,88,84,79,76,-1,   // bar 8
+        };
+        int[] bassRoots = { 48, 53, 55, 48, 45, 53, 55, 48 }; // per bar
+        int bars = 8;
+
+        float total = bars * 4 * beat;
+        float[] b = new float[(int)(total * SR) + SR / 5];
+
+        for (int i = 0; i < mel.Length; i++)
+            MelNote(b, i * eighth, eighth * 0.95f, mel[i], 0.16f, 0.3f);
+
+        for (int bar = 0; bar < bars; bar++)
         {
-            float t0 = barIdx * bar;
-            // boom boom clap (rest): stomps on 1 & 2, clap on 3
-            Kick(b, t0 + 0f);
-            Kick(b, t0 + beat);
-            Clap(b, t0 + beat * 2f);
-            // low bass under the stomps for body
-            Bass(b, t0 + 0f, beat * 0.9f, 82f);      // E2
-            Bass(b, t0 + beat, beat * 0.9f, 82f);
+            int root = bassRoots[bar];
+            MelNote(b, bar * 4 * beat, beat * 2f * 0.95f, root, 0.16f, 0.5f);
+            MelNote(b, bar * 4 * beat + beat * 2f, beat * 2f * 0.95f, root, 0.16f, 0.5f);
+            Kick(b, bar * 4 * beat);
+            Kick(b, bar * 4 * beat + beat * 2f);
+            for (int e = 0; e < 8; e++) Hat(b, bar * 4 * beat + e * eighth, 0.06f);
         }
+
         for (int i = 0; i < b.Length; i++) b[i] = Mathf.Clamp(b[i], -1f, 1f);
-        var clip = AudioClip.Create("beat", b.Length, 1, SR, false);
+        var clip = AudioClip.Create("arcade", b.Length, 1, SR, false);
         clip.SetData(b, 0);
         return clip;
     }
