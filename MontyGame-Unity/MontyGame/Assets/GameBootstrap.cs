@@ -44,7 +44,7 @@ public static class GameBootstrap
 
     static void CleanupOldObjects()
     {
-        var all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+        var all = Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var go in all)
         {
             string n = go.name;

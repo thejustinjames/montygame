@@ -22,7 +22,7 @@ public static class Sfx
         src.spatialBlend = 0f;   // 2D, no distance attenuation
         src.volume = 1f;
         // Sounds are silent without an AudioListener — add one if the scene lacks it
-        if (Object.FindObjectOfType<AudioListener>() == null)
+        if (Object.FindFirstObjectByType<AudioListener>() == null)
             go.AddComponent<AudioListener>();
     }
 
