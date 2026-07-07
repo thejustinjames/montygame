@@ -166,16 +166,36 @@ public class GameController : MonoBehaviour
     IEnumerator FlyerHit(Player pl, int type)
     {
         busy = true;
-        int target = type == 0 ? PteroTarget : ShipTarget;
-        string tex = type == 0 ? "fly_ptero" : "fly_ship";
-        message = type == 0
-            ? $"A pterodactyl grabbed {pl.name} — back to {target}!"
-            : $"A spaceship zoomed {pl.name} up to {target}!";
-        followTarget = pl.token;
-        zoomed = true;
-        yield return new WaitForSeconds(0.7f);
-        yield return CarryTo(pl, target, tex);
-        pl.square = target;
+
+        // Pterodactyl: a coin shields you (consumes one), otherwise back to 10
+        if (type == 0)
+        {
+            if (pl.stars > 0)
+            {
+                pl.stars--;
+                message = $"{pl.name}'s coin shielded them from the pterodactyl!";
+                Sfx.Play("shield");
+                yield return new WaitForSeconds(1.3f);
+                busy = false;
+                yield break;
+            }
+            message = $"A pterodactyl grabbed {pl.name} — back to {PteroTarget}!";
+            Sfx.Play("hit");
+            followTarget = pl.token; zoomed = true;
+            yield return new WaitForSeconds(0.7f);
+            yield return CarryTo(pl, PteroTarget, "fly_ptero");
+            pl.square = PteroTarget;
+        }
+        else // Spaceship: up to 90
+        {
+            message = $"A spaceship zoomed {pl.name} up to {ShipTarget}!";
+            Sfx.Play("up");
+            followTarget = pl.token; zoomed = true;
+            yield return new WaitForSeconds(0.7f);
+            yield return CarryTo(pl, ShipTarget, "fly_ship");
+            pl.square = ShipTarget;
+        }
+
         yield return new WaitForSeconds(0.5f);
         zoomed = false;
         yield return new WaitForSeconds(0.7f);
@@ -292,6 +312,7 @@ public class GameController : MonoBehaviour
                 acc = 0f;
                 diceFace = rng.Next(1, 7);
                 step += 0.02f;
+                Sfx.Play("roll", 0.35f);
             }
             yield return null;
         }
@@ -341,6 +362,7 @@ public class GameController : MonoBehaviour
         {
             bool hulk = BoardLayout.HulkLadders.Contains(p.square);
             message = hulk ? $"The HULK carries {p.name} up!" : $"A spaceship flies {p.name} up!";
+            Sfx.Play("up");
             yield return new WaitForSeconds(0.4f);
             yield return CarryTo(p, up, BoardLayout.LadderMarker(p.square));
             p.square = up;
@@ -350,6 +372,7 @@ public class GameController : MonoBehaviour
         {
             bool trex = BoardLayout.TrexSnakes.Contains(p.square);
             message = trex ? $"A T-REX drags {p.name} down!" : $"A vortex sucks {p.name} down!";
+            Sfx.Play("down");
             yield return new WaitForSeconds(0.4f);
             yield return CarryTo(p, down, BoardLayout.SnakeMarker(p.square));
             p.square = down;
@@ -361,7 +384,8 @@ public class GameController : MonoBehaviour
             yield return new WaitForSeconds(0.9f);
             won = true;
             winner = current;
-            message = $"🏆 {p.name} WINS with {p.stars} stars! 🏆";
+            message = $"🏆 {p.name} WINS with {p.stars} coins! 🏆";
+            Sfx.Play("win", 0.8f);
             zoomed = false; // pull back to celebrate on the full board
             busy = false;
             yield break;
@@ -383,13 +407,14 @@ public class GameController : MonoBehaviour
         {
             starsTaken.Add(sq);
             p.stars++;
+            Sfx.Play("coin");
             var star = GameObject.Find($"Star_{sq}");
             if (star != null)
             {
                 var sr = star.GetComponent<SpriteRenderer>();
                 if (sr != null) sr.enabled = false;
             }
-            message = $"{p.name} grabbed a star!  ({p.stars})";
+            message = $"{p.name} grabbed a coin! It shields against pterodactyls. ({p.stars})";
         }
     }
 
@@ -598,7 +623,7 @@ public class GameController : MonoBehaviour
             string arrow = (i == current && !won) ? "▶ " : "   ";
             string where = p.square < 1 ? "start" : $"square {p.square}";
             GUI.Label(new Rect(28, 22 + i * 28, 360, 28),
-                      $"{arrow}{p.name}:  {where}   ⭐ {p.stars}", turnStyle);
+                      $"{arrow}{p.name}:  {where}   coins {p.stars}", turnStyle);
         }
 
         GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
@@ -611,7 +636,10 @@ public class GameController : MonoBehaviour
             Color oldbg = GUI.backgroundColor;
             GUI.backgroundColor = cp.color;   // ROLL button in the current player's colour
             if (GUI.Button(new Rect(15, 172, 300, 62), $"{cp.name.ToUpper()}: ROLL  🎲", buttonStyle))
+            {
+                Sfx.Play("click");
                 StartCoroutine(DoTurn(rng.Next(1, 7)));
+            }
             GUI.backgroundColor = oldbg;
         }
         else if (won)

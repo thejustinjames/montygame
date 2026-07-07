@@ -225,16 +225,28 @@ public static class GameBootstrap
 
     static void CreateCollectibles()
     {
+        var coinTex = Resources.Load<Texture2D>("coin");
         foreach (int n in BoardLayout.Collectibles)
         {
-            var star = new GameObject($"Star_{n}");
-            star.transform.position = BoardLayout.SquareToWorld(n) + new Vector3(0.25f, -0.25f, -1);
-            star.transform.localScale = new Vector3(0.3f, 0.3f, 1);
+            var star = new GameObject($"Star_{n}");   // name kept; now a golden coin
+            star.transform.position = BoardLayout.SquareToWorld(n) + new Vector3(0.22f, -0.22f, -1);
             var sr = star.AddComponent<SpriteRenderer>();
-            sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.1f)); // gold star (square placeholder)
             sr.sortingOrder = 2;
+            if (coinTex != null)
+            {
+                sr.sprite = Sprite.Create(coinTex, new Rect(0, 0, coinTex.width, coinTex.height),
+                                          new Vector2(0.5f, 0.5f), coinTex.width);
+                float target = BoardLayout.Cell * 0.42f;
+                float w = sr.sprite.bounds.size.x;
+                if (w > 0.001f) star.transform.localScale = Vector3.one * (target / w);
+            }
+            else
+            {
+                sr.sprite = MakeSquareSprite(new Color(1f, 0.85f, 0.1f));
+                star.transform.localScale = new Vector3(0.3f, 0.3f, 1);
+            }
         }
-        Debug.Log("✓ Collectibles placed");
+        Debug.Log("✓ Golden coins placed");
     }
 
     static void CreateTokens()
