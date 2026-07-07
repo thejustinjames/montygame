@@ -109,6 +109,8 @@ public class GameController : MonoBehaviour
         // spawn the random flyers
         SpawnFlyer(0); SpawnFlyer(0);   // pterodactyls
         SpawnFlyer(1); SpawnFlyer(1);   // spaceships
+
+        Sfx.StartMusic();
     }
 
     void SpawnFlyer(int type)
@@ -818,8 +820,14 @@ public class GameController : MonoBehaviour
         float w = 150f, h = 44f, m = 15f;
         var newRect = new Rect(Screen.width - w - m, m, w, h);
         var quitRect = new Rect(Screen.width - w - m, m + h + 8f, w, h);
+        var musicRect = new Rect(Screen.width - w - m, m + 2 * (h + 8f), w, h);
+        var sfxRect = new Rect(Screen.width - w - m, m + 3 * (h + 8f), w, h);
         if (!confirmingReset && GUI.Button(newRect, "NEW GAME", buttonStyle)) confirmingReset = true;
         if (!confirmingReset && GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
+        if (!confirmingReset && GUI.Button(musicRect, $"Music: {(Sfx.MusicOn ? "On" : "Off")}", buttonStyle))
+            Sfx.SetMusic(!Sfx.MusicOn);
+        if (!confirmingReset && GUI.Button(sfxRect, $"SFX: {(Sfx.FxOn ? "On" : "Off")}", buttonStyle))
+            Sfx.SetFx(!Sfx.FxOn);
         DrawConfirm();
     }
 

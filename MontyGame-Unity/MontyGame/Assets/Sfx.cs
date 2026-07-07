@@ -9,8 +9,12 @@ public static class Sfx
 {
     const int SR = 44100;
     static AudioSource src;
+    static AudioSource musicSrc;
     static readonly Dictionary<string, AudioClip> cache = new Dictionary<string, AudioClip>();
     static System.Random rng = new System.Random(1);
+
+    public static bool FxOn = true;
+    public static bool MusicOn = true;
 
     static void Ensure()
     {
@@ -28,9 +32,102 @@ public static class Sfx
 
     public static void Play(string name, float volume = 0.6f)
     {
+        if (!FxOn) return;
         Ensure();
         if (!cache.TryGetValue(name, out var clip)) { clip = Build(name); cache[name] = clip; }
         if (clip != null) src.PlayOneShot(clip, volume);
+    }
+
+    // ---- background music (procedural stomp-stomp-clap beat) ----
+    public static void StartMusic()
+    {
+        Ensure();
+        if (musicSrc == null)
+        {
+            var go = new GameObject("_Music");
+            Object.DontDestroyOnLoad(go);
+            musicSrc = go.AddComponent<AudioSource>();
+            musicSrc.loop = true;
+            musicSrc.playOnAwake = false;
+            musicSrc.spatialBlend = 0f;
+            musicSrc.volume = 0.4f;
+            musicSrc.clip = BuildBeat();
+        }
+        if (MusicOn && !musicSrc.isPlaying) musicSrc.Play();
+    }
+
+    public static void SetMusic(bool on)
+    {
+        MusicOn = on;
+        if (musicSrc == null) { StartMusic(); return; }
+        if (on) { if (!musicSrc.isPlaying) musicSrc.Play(); }
+        else musicSrc.Stop();
+    }
+
+    public static void SetFx(bool on) => FxOn = on;
+
+    static void Kick(float[] b, float atSec)
+    {
+        int start = (int)(atSec * SR);
+        int len = (int)(0.22f * SR);
+        float phase = 0f;
+        for (int i = 0; i < len && start + i < b.Length; i++)
+        {
+            float u = (float)i / len;
+            float freq = Mathf.Lerp(165f, 45f, Mathf.Clamp01(u * 6f));
+            phase += 2f * Mathf.PI * freq / SR;
+            b[start + i] += Mathf.Sin(phase) * 0.95f * Mathf.Exp(-u * 9f);
+        }
+    }
+
+    static void Clap(float[] b, float atSec)
+    {
+        for (int k = 0; k < 3; k++)
+        {
+            int start = (int)((atSec + k * 0.012f) * SR);
+            int len = (int)(0.10f * SR);
+            for (int i = 0; i < len && start + i < b.Length; i++)
+            {
+                float u = (float)i / len;
+                b[start + i] += (float)(rng.NextDouble() * 2 - 1) * 0.45f * Mathf.Exp(-u * 16f);
+            }
+        }
+    }
+
+    static void Bass(float[] b, float atSec, float dur, float freq)
+    {
+        int start = (int)(atSec * SR);
+        int len = (int)(dur * SR);
+        float phase = 0f;
+        for (int i = 0; i < len && start + i < b.Length; i++)
+        {
+            float u = (float)i / len;
+            phase += 2f * Mathf.PI * freq / SR;
+            float env = Mathf.Min(1f, Mathf.Min(u * 12f, (1f - u) * 6f) + 0.1f);
+            b[start + i] += (Mathf.Sin(phase) > 0 ? 0.18f : -0.18f) * env; // square-ish bass
+        }
+    }
+
+    static AudioClip BuildBeat()
+    {
+        float beat = 60f / 104f;         // ~104 BPM
+        float bar = beat * 4f;
+        float[] b = new float[(int)(bar * 2f * SR)]; // 2 bars
+        for (int barIdx = 0; barIdx < 2; barIdx++)
+        {
+            float t0 = barIdx * bar;
+            // boom boom clap (rest): stomps on 1 & 2, clap on 3
+            Kick(b, t0 + 0f);
+            Kick(b, t0 + beat);
+            Clap(b, t0 + beat * 2f);
+            // low bass under the stomps for body
+            Bass(b, t0 + 0f, beat * 0.9f, 82f);      // E2
+            Bass(b, t0 + beat, beat * 0.9f, 82f);
+        }
+        for (int i = 0; i < b.Length; i++) b[i] = Mathf.Clamp(b[i], -1f, 1f);
+        var clip = AudioClip.Create("beat", b.Length, 1, SR, false);
+        clip.SetData(b, 0);
+        return clip;
     }
 
     static float[] Buf(float seconds) => new float[Mathf.Max(1, (int)(seconds * SR))];
