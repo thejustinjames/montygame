@@ -76,6 +76,8 @@ public class GameController : MonoBehaviour
     const float FlyBound = 9f;        // roam area around the board
     const int PteroTarget = 10;       // pterodactyl grabs you back to 10
     const int ShipTarget = 90;        // spaceship zooms you up to 90
+    private string bigMsg = "";       // big centered flash message
+    private Color bigMsgColor = Color.white;
 
     IEnumerator Start()
     {
@@ -179,12 +181,15 @@ public class GameController : MonoBehaviour
             if (pl.stars > 0)
             {
                 pl.stars--;
+                bigMsg = "Shielded!"; bigMsgColor = new Color(0.5f, 1f, 0.6f);
                 message = $"{pl.name}'s coin shielded them from the pterodactyl!";
                 Sfx.Play("shield");
-                yield return new WaitForSeconds(1.3f);
+                yield return new WaitForSeconds(1.5f);
+                bigMsg = "";
                 busy = false;
                 yield break;
             }
+            bigMsg = "Oh no!"; bigMsgColor = new Color(1f, 0.5f, 0.45f);
             message = $"A pterodactyl grabbed {pl.name} — back to {PteroTarget}!";
             Sfx.Play("hit");
             followTarget = pl.token; zoomed = true;
@@ -194,6 +199,7 @@ public class GameController : MonoBehaviour
         }
         else // Spaceship: up to 90
         {
+            bigMsg = "Being beamed up!"; bigMsgColor = new Color(0.5f, 0.9f, 1f);
             message = $"A spaceship zoomed {pl.name} up to {ShipTarget}!";
             Sfx.Play("up");
             followTarget = pl.token; zoomed = true;
@@ -205,6 +211,7 @@ public class GameController : MonoBehaviour
         yield return new WaitForSeconds(0.5f);
         zoomed = false;
         yield return new WaitForSeconds(0.7f);
+        bigMsg = "";
         busy = false;
     }
 
@@ -745,6 +752,8 @@ public class GameController : MonoBehaviour
         if (rolling) { DrawDieShadow(); DrawPipDie(diceFace, dieAngle); }
         else if (popping) DrawNumberPop(diceFace, popScale);
 
+        if (!string.IsNullOrEmpty(bigMsg)) DrawBigMsg();
+
         DrawSystemButtons();
     }
 
@@ -790,6 +799,18 @@ public class GameController : MonoBehaviour
         { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         st.normal.textColor = p.color;
         GUI.Label(new Rect(sp.x - 34f, gy - 96f - bob, 68f, 52f), "▼", st);
+    }
+
+    void DrawBigMsg()
+    {
+        var st = new GUIStyle(GUI.skin.label)
+        { fontSize = 72, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        var r = new Rect(0, Screen.height * 0.60f, Screen.width, 110);
+        // drop shadow for readability over the busy board
+        st.normal.textColor = new Color(0, 0, 0, 0.7f);
+        GUI.Label(new Rect(r.x + 4, r.y + 4, r.width, r.height), bigMsg, st);
+        st.normal.textColor = bigMsgColor;
+        GUI.Label(r, bigMsg, st);
     }
 
     void DrawSystemButtons()
