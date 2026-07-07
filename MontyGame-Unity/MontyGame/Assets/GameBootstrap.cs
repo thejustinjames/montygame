@@ -72,6 +72,7 @@ public static class GameBootstrap
         cam.orthographic = true;
         cam.orthographicSize = 6.2f; // fits the 10-unit board + margin
         cam.backgroundColor = new Color(0.10f, 0.13f, 0.20f); // deep space
+        if (cam.GetComponent<AudioListener>() == null) cam.gameObject.AddComponent<AudioListener>();
         Debug.Log("✓ Camera framed on board");
     }
 

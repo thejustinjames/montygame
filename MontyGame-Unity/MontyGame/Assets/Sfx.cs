@@ -19,6 +19,11 @@ public static class Sfx
         Object.DontDestroyOnLoad(go);
         src = go.AddComponent<AudioSource>();
         src.playOnAwake = false;
+        src.spatialBlend = 0f;   // 2D, no distance attenuation
+        src.volume = 1f;
+        // Sounds are silent without an AudioListener — add one if the scene lacks it
+        if (Object.FindObjectOfType<AudioListener>() == null)
+            go.AddComponent<AudioListener>();
     }
 
     public static void Play(string name, float volume = 0.6f)
