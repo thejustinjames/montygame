@@ -41,6 +41,12 @@ public class GameController : MonoBehaviour
     private float dieHeight = 0f;   // 0 = on ground, 1 = bounce apex
     private float dieGroundY = 0f;  // resting baseline for the shadow
     private float dieSquash = 0f;   // +squash (wide/short), -stretch (tall/thin)
+    private string popEquation = "";// e.g. "6 + 2 = 8" for chained rolls
+
+    // --- dynamic diamond bonus (moves to stay ahead of the player) ---
+    private Transform diamond;
+    private int diamondSquare = -1;
+    private int rollsSinceDiamond = 0;
 
     // --- cinematic camera ---
     private Camera cam;
@@ -265,15 +271,11 @@ public class GameController : MonoBehaviour
         cam.orthographicSize = Mathf.Lerp(cam.orthographicSize, wantSize, k);
     }
 
-    IEnumerator DoTurn(int roll)
+    // One die throw: tumbles + bounces across the screen, settles on `roll`.
+    IEnumerator RollDie(int roll, Player p, bool first)
     {
-        busy = true;
-        lastRoll = roll;
-        Player p = players[current];
-
-        // 1) Throw the die: it tumbles + bounces across the screen, then settles
         rolling = true;
-        message = $"{p.name} is rolling...";
+        if (first) message = $"{p.name} is rolling...";
         float rollTime = 2.8f;
         float cy = Screen.height * 0.42f;
         dieGroundY = cy;
@@ -282,30 +284,26 @@ public class GameController : MonoBehaviour
         float L = margin, Rw = Screen.width - margin;
         float startOff = (float)rng.NextDouble() * (Rw - L);
         float spinDir = rng.Next(0, 2) == 0 ? 1f : -1f;
-        float bounces = 4f;                                   // more, further bounces
+        float bounces = 4f;
         float elapsed = 0f, step = 0.10f, acc = 0f;
         while (elapsed < rollTime)
         {
             float dt = Time.deltaTime;
             elapsed += dt; acc += dt;
             float prog = elapsed / rollTime;
-            float ease = 1f - Mathf.Pow(1f - prog, 2f);       // ease-out travel
+            float ease = 1f - Mathf.Pow(1f - prog, 2f);
 
-            // horizontal: zip across, bouncing off the walls (ping-pong), then settle center
-            float travel = (Rw - L) * 2.6f * ease;            // travels much further
+            float travel = (Rw - L) * 2.6f * ease;
             float pingX = L + Mathf.PingPong(startOff + spinDir * travel, Rw - L);
             float settle = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.78f, 1f, prog));
             float x = Mathf.Lerp(pingX, Screen.width * 0.5f, settle);
 
-            // vertical bounces, decaying to the ground
             float h = Mathf.Abs(Mathf.Sin(prog * Mathf.PI * bounces)) * (1f - prog);
             dieHeight = h;
             diePos = new Vector2(x, cy - h * Screen.height * 0.22f);
-
-            dieScale = 1f + h * 0.30f;                          // bigger up high = 3D
-            // squash on landing (h~0), slight stretch when rising
+            dieScale = 1f + h * 0.30f;
             dieSquash = Mathf.Clamp01(1f - h * 5f) * 0.5f - Mathf.Clamp01(h) * 0.12f;
-            dieAngle += spinDir * 1000f * dt * (0.3f + (1f - prog)); // spin, slowing
+            dieAngle += spinDir * 1000f * dt * (0.3f + (1f - prog));
 
             if (acc >= step)
             {
@@ -317,46 +315,70 @@ public class GameController : MonoBehaviour
             yield return null;
         }
 
-        // 2) Settle flat and centered on the rolled face for a good beat
         diceFace = roll;
-        dieAngle = 0f;
-        dieScale = 1f;
-        dieHeight = 0f;
-        dieSquash = 0f;
+        dieAngle = 0f; dieScale = 1f; dieHeight = 0f; dieSquash = 0f;
         diePos = new Vector2(Screen.width * 0.5f, cy);
         yield return new WaitForSeconds(0.9f);
         rolling = false;
+    }
 
-        // 3) Pop the number up big and hold it long so kids can read it
+    IEnumerator DoTurn()
+    {
+        busy = true;
+        Player p = players[current];
+
+        // Roll — with roll-again on a 6 (sum them: 6 + 2 = 8). No effects trigger
+        // "in between" because we move once by the total.
+        var rolls = new System.Collections.Generic.List<int>();
+        int roll;
+        do
+        {
+            roll = rng.Next(1, 7);
+            yield return RollDie(roll, p, rolls.Count == 0);
+            rolls.Add(roll);
+            if (roll == 6 && rolls.Count < 4)
+            {
+                message = $"{p.name} rolled a 6 — ROLL AGAIN!";
+                Sfx.Play("shield", 0.5f);
+                yield return new WaitForSeconds(1.0f);
+            }
+        } while (roll == 6 && rolls.Count < 4);
+
+        int total = 0;
+        foreach (int r in rolls) total += r;
+        lastRoll = total;
+
+        // Show the result big (an equation like "6 + 2 = 8" when chained)
+        popEquation = rolls.Count > 1 ? string.Join(" + ", rolls) + " = " + total : "";
         popping = true;
-        message = $"{p.name} rolled a {roll}!";
+        message = rolls.Count > 1 ? $"{p.name} rolled {popEquation}!" : $"{p.name} rolled a {total}!";
         float pt = 0f;
         while (pt < 0.8f)
         {
             pt += Time.deltaTime;
             float f = pt / 0.8f;
-            popScale = 1.25f - 0.25f * Mathf.Cos(Mathf.Min(f * 2f, 1f) * Mathf.PI); // overshoot then settle
+            popScale = 1.25f - 0.25f * Mathf.Cos(Mathf.Min(f * 2f, 1f) * Mathf.PI);
             yield return null;
         }
         popScale = 1f;
-        yield return new WaitForSeconds(2.2f); // long hold on the big number
+        yield return new WaitForSeconds(2.2f);
         popping = false;
+        popEquation = "";
 
-        // 4) Zoom in on the active player and follow them (slow, gentle)
+        // Zoom in and move by the TOTAL (effects only apply on the final landing)
         followTarget = p.token;
         zoomed = true;
         yield return new WaitForSeconds(1.1f);
 
-        int target = Mathf.Min(p.square + roll, BoardLayout.Squares);
-
+        int target = Mathf.Min(p.square + total, BoardLayout.Squares);
         while (p.square < target)
         {
             yield return HopTo(p, p.square + 1);
             p.square++;
-            TryCollect(p, p.square);
-            // tiny irregular pause, like a hand setting the piece down
             yield return new WaitForSeconds(RandRange(0.04f, 0.22f));
         }
+        TryCollect(p, p.square);   // coin only on the square you LAND on
+        TryDiamond(p);             // diamond if you land on it
 
         if (BoardLayout.Ladders.TryGetValue(p.square, out int up))
         {
@@ -397,8 +419,65 @@ public class GameController : MonoBehaviour
         yield return new WaitForSeconds(1.4f);
 
         current = 1 - current;
+
+        // every few rolls the diamond (re)appears ahead of the next player
+        rollsSinceDiamond += rolls.Count;
+        if (diamondSquare < 0 || rollsSinceDiamond >= 3) { MoveDiamondAhead(); rollsSinceDiamond = 0; }
+
         message = $"{players[current].name}'s turn — press ROLL!";
         busy = false;
+    }
+
+    // Diamond bonus: same effect as a coin, but it hops ahead of the player.
+    void MoveDiamondAhead()
+    {
+        int baseSq = Mathf.Max(0, players[current].square);
+        int sq = -1;
+        for (int tries = 0; tries < 25; tries++)
+        {
+            int cand = Mathf.Min(baseSq + rng.Next(3, 13), 99);
+            if (cand < 2) continue;
+            if (BoardLayout.Ladders.ContainsKey(cand) || BoardLayout.Snakes.ContainsKey(cand)
+                || BoardLayout.Collectibles.Contains(cand)) continue;
+            sq = cand; break;
+        }
+        if (sq < 0) return;
+        diamondSquare = sq;
+        EnsureDiamond();
+        // set position while inactive so the Bobber anchors to the new spot on enable
+        diamond.gameObject.SetActive(false);
+        diamond.position = BoardLayout.SquareToWorld(sq) + new Vector3(-0.22f, 0.22f, -1.2f);
+        diamond.gameObject.SetActive(true);
+    }
+
+    void EnsureDiamond()
+    {
+        if (diamond != null) return;
+        var tex = Resources.Load<Texture2D>("diamond");
+        var go = new GameObject("Diamond");
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sortingOrder = 4;
+        if (tex != null)
+        {
+            sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), tex.width);
+            float target = BoardLayout.Cell * 0.4f;
+            float w = sr.sprite.bounds.size.x;
+            if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
+        }
+        go.AddComponent<Bobber>();
+        diamond = go.transform;
+    }
+
+    void TryDiamond(Player p)
+    {
+        if (diamondSquare > 0 && p.square == diamondSquare)
+        {
+            p.stars++;
+            Sfx.Play("coin");
+            message = $"{p.name} grabbed a DIAMOND! It shields against pterodactyls. ({p.stars})";
+            if (diamond != null) diamond.gameObject.SetActive(false);
+            diamondSquare = -1;
+        }
     }
 
     void TryCollect(Player p, int sq)
@@ -594,6 +673,20 @@ public class GameController : MonoBehaviour
     {
         Rect r = DieRect();
         Vector2 ctr = r.center;
+
+        // chained roll -> show the equation "6 + 2 = 8" on a wide plaque
+        if (!string.IsNullOrEmpty(popEquation))
+        {
+            float w = Screen.width * 0.55f * scale, h = r.height * 1.1f * scale;
+            var plaque = new Rect(ctr.x - w / 2f, ctr.y - h / 2f, w, h);
+            GUI.Box(plaque, GUIContent.none, boxStyle);
+            var st = new GUIStyle(GUI.skin.label)
+            { fontSize = 70, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            st.normal.textColor = Color.white;
+            GUI.Label(plaque, popEquation, st);
+            return;
+        }
+
         var big = new Rect(ctr.x - r.width * scale / 2f, ctr.y - r.height * scale / 2f,
                            r.width * scale, r.height * scale);
         Texture2D tex = FaceTex(face);
@@ -638,7 +731,7 @@ public class GameController : MonoBehaviour
             if (GUI.Button(new Rect(15, 172, 300, 62), $"{cp.name.ToUpper()}: ROLL  🎲", buttonStyle))
             {
                 Sfx.Play("click");
-                StartCoroutine(DoTurn(rng.Next(1, 7)));
+                StartCoroutine(DoTurn());
             }
             GUI.backgroundColor = oldbg;
         }
@@ -811,6 +904,9 @@ public class GameController : MonoBehaviour
         zoomed = false;
         followTarget = null;
         confirmingReset = false;
+        diamondSquare = -1;
+        rollsSinceDiamond = 0;
+        if (diamond != null) diamond.gameObject.SetActive(false);
         // back to character select for a fresh game
         selecting = true;
         picking = 0;

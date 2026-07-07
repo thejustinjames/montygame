@@ -52,7 +52,7 @@ public static class GameBootstrap
                 n == "Background" || n.StartsWith("Token") || n.StartsWith("Tile_") ||
                 n.StartsWith("Label_") || n.StartsWith("Sq_") || n.StartsWith("Link_") ||
                 n.StartsWith("Star_") || n.StartsWith("Marker_") || n == "Carrier" ||
-                n.StartsWith("Flyer_"))
+                n.StartsWith("Flyer_") || n == "Diamond")
             {
                 Object.Destroy(go);
             }

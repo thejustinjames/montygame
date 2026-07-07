@@ -58,3 +58,19 @@ public class Spinner : MonoBehaviour
     public float speed = 90f;
     void Update() => transform.Rotate(0f, 0f, speed * Time.deltaTime);
 }
+
+/// <summary>Bobs a transform up and down (used for the floating diamond).</summary>
+public class Bobber : MonoBehaviour
+{
+    public float amp = 0.12f, speed = 3f;
+    Vector3 basePos;
+    bool have;
+    void OnEnable() { basePos = transform.position; have = true; }
+    void Update()
+    {
+        if (!have) { basePos = transform.position; have = true; }
+        var p = basePos;
+        p.y += Mathf.Sin(Time.time * speed) * amp;
+        transform.position = p;
+    }
+}
