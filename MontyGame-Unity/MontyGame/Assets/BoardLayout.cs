@@ -38,6 +38,13 @@ public static class BoardLayout
         5, 14, 33, 45, 58, 66, 73, 84, 91,
     };
 
+    // Rubies: land on one to pocket it (hold up to 3). Spending a ruby saves you
+    // from a snake — none of these sit on a ladder, snake or coin square.
+    public static readonly HashSet<int> Rubies = new HashSet<int>
+    {
+        11, 21, 27, 39, 43, 55, 64, 76, 82, 93,
+    };
+
     public const int Boss = 100; // boss guards the final square
 
     // Most ladders are spaceships; these bases are the Hulk instead.

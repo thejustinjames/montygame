@@ -248,6 +248,36 @@ public static class GameBootstrap
             }
         }
         Debug.Log("✓ Golden coins placed");
+        CreateRubies();
+    }
+
+    static void CreateRubies()
+    {
+        // no ruby art yet — a deep-red tinted diamond reads as one at token size
+        var tex = Resources.Load<Texture2D>("diamond");
+        foreach (int n in BoardLayout.Rubies)
+        {
+            var go = new GameObject($"Ruby_{n}");
+            go.transform.position = BoardLayout.SquareToWorld(n) + new Vector3(-0.24f, -0.22f, -1);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sortingOrder = 2;
+            sr.color = new Color(0.95f, 0.15f, 0.35f);   // ruby red
+            if (tex != null)
+            {
+                sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                          new Vector2(0.5f, 0.5f), tex.width);
+                float target = BoardLayout.Cell * 0.36f;
+                float w = sr.sprite.bounds.size.x;
+                if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
+            }
+            else
+            {
+                sr.sprite = MakeSquareSprite(new Color(0.95f, 0.15f, 0.35f));
+                go.transform.localScale = new Vector3(0.26f, 0.26f, 1);
+            }
+            go.AddComponent<Bobber>();   // gently bob so they read as pickups
+        }
+        Debug.Log("✓ Rubies placed");
     }
 
     static void CreateTokens()

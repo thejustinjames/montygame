@@ -72,6 +72,8 @@ rows alternate direction, 100 top-left. Win by reaching **100**.
   Most are vortexes; **62 is a T-Rex** dragging you down.
 - **Coins:** squares 5, 14, 33, 45, 58, 66, 73, 84, 91. Taken by the first player to
   **land** on them (passing over doesn't collect).
+- **Rubies:** squares 11, 21, 27, 39, 43, 55, 64, 76, 82, 93 — ten of them, none sharing a
+  square with a ladder, snake, coin or their landing spots. Land-only, like coins.
 - **Boss:** square 100, which is also the win.
 
 ### Turn loop (`GameController.cs`)
@@ -98,6 +100,13 @@ single source of truth — `GameBootstrap` spawns one token per possible player 
   drag a leader backwards).
 - **Diamond:** a bonus that re-spawns a few squares *ahead* of the current player every
   ~3 rolls, so there's always something to chase. Shields like a coin.
+- **Rubies:** carry at most **3** (`MaxRubies`). Landing on a snake **automatically spends
+  one** and cancels the fall — no prompt, because a rescue that just happens delights a
+  5-year-old more than a yes/no question mid-turn. Full pockets? The ruby stays on the board
+  for someone else rather than being wasted. Rubies stop **snakes only** — coins stop the
+  pterodactyl, and nothing stops the Hulk. Each pickup means exactly one thing.
+- **The HULK on square 36** (the ladder): carries you up — then **shakes every ruby out of
+  your pockets** (`HulkRobs()`, shared with the roaming Hulk so the two can't drift apart).
 - **The HULK** (added 2026-07-13): an extra mover who hunts the players.
   - Drops in at square **100** (~35% chance on any turn he's off the board), with a roar.
   - Each turn he **rolls the die himself — tinted green** — then stomps that many squares
@@ -108,8 +117,23 @@ single source of truth — `GameBootstrap` spawns one token per possible player 
     A roll that would carry him past either end means he gets bored and leaves (he can drop
     in again later). So he's a **guardian of the run-up to the goal**.
   - **If he lands on a player's square, that player is thrown back to square 50** with a
-    roar and a smash. It only triggers on *his* landing — a player landing on *his* square
-    is safe, and coins do **not** shield against him.
+    roar and a smash, **and loses every ruby**. It only triggers on *his* landing — a player
+    landing on *his* square is safe, and coins do **not** shield against him.
+  - **A snake can catch the Hulk too.** Land him on a snake head and he's dragged down like
+    anyone else — and from then on he's a **climber** (`hulkClimbing`): he ignores the
+    players and only heads back toward 100, whatever his die says. Reaching the top, he
+    stomps off the board and may drop in again later, fresh. A snake is therefore the only
+    thing in the game that gets him off your back — though he'll still smash anyone he
+    happens to land on during the climb, down where the players actually are.
+
+### Screens
+- **HOW TO PLAY** — a table of every piece and what it does. The text lives in `RuleRows` in
+  `GameController.cs`, deliberately next to the code implementing it, so the rules screen
+  can't quietly drift out of sync with the actual rules. **Update it when you change a rule.**
+- **CREDITS** — "CODED BY DADDY / FOR MONTY / HAPPY 5th BIRTHDAY!", with ticker tape falling
+  and balloons rising. Both are pure IMGUI: the balloon is a procedurally generated texture
+  (ellipse + knot + highlight), and every particle's path comes from a hash of its index, so
+  there's no particle state — it animates straight off the clock.
 
 ### Characters / avatars
 Character-select gallery after the player count; each player picks in turn, and an avatar

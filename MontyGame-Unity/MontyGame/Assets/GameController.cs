@@ -18,8 +18,11 @@ public class GameController : MonoBehaviour
         public Color color;
         public int square = 0;   // 0 = off the board, waiting to roll on
         public int stars = 0;
+        public int rubies = 0;   // spend one to survive a snake; carry at most MaxRubies
         public bool pteroUsed = false; // a pterodactyl may carry each player off only once per game
     }
+
+    const int MaxRubies = 3;   // pockets only hold so many
 
     // --- how many players can share the board, and where they sit in a square ---
     public const int MaxPlayers = 6;
@@ -49,6 +52,7 @@ public class GameController : MonoBehaviour
     private int winner = -1;
     private string message = "How many players?";
     private readonly HashSet<int> starsTaken = new HashSet<int>();
+    private readonly HashSet<int> rubiesTaken = new HashSet<int>();
     private readonly System.Random rng = new System.Random();
 
     // --- dice roll animation ---
@@ -87,6 +91,10 @@ public class GameController : MonoBehaviour
     private bool choosingCount = true;  // true until the player count is chosen
     private bool selecting = false;     // true until every player has picked
     private bool confirmingReset = false; // showing the "start a new game?" prompt
+    private bool showRules = false;       // HOW TO PLAY overlay
+    private bool showCredits = false;     // CREDITS overlay (balloons + ticker tape)
+    private float partyStart = 0f;        // when the credits opened, so the party starts fresh
+    private Texture2D balloonTex;
     private int picking = 0;            // which player is currently choosing
     private int[] chosen;               // avatar index each player picked (-1 = not yet)
     private const int AvatarCount = 7;
@@ -109,6 +117,7 @@ public class GameController : MonoBehaviour
     //     third player moving in reverse. Land on him and he throws you to 50.
     private Transform hulkToken;
     private int hulkSquare = -1;                        // < 1 = not on the board
+    private bool hulkClimbing = false;                  // a snake dropped him: now he only heads for 100
     const int HulkStart = BoardLayout.Squares;          // he drops in at 100
     const int HulkRange = 20;                           // ...and roams no more than 20 squares
     const int HulkFloor = BoardLayout.Squares - HulkRange;
@@ -487,6 +496,7 @@ public class GameController : MonoBehaviour
             yield return new WaitForSeconds(RandRange(0.04f, 0.22f));
         }
         TryCollect(p, p.square);   // coin only on the square you LAND on
+        TryRuby(p, p.square);      // ...same for rubies
         TryDiamond(p);             // diamond if you land on it
 
         if (BoardLayout.Ladders.TryGetValue(p.square, out int up))
@@ -498,15 +508,33 @@ public class GameController : MonoBehaviour
             yield return CarryTo(p, up, BoardLayout.LadderMarker(p.square));
             p.square = up;
             TryCollect(p, p.square);
+
+            // ...but he charges a toll: the Hulk pockets every ruby you're carrying.
+            if (hulk && p.rubies > 0) yield return HulkRobs(p);
         }
         else if (BoardLayout.Snakes.TryGetValue(p.square, out int down))
         {
             bool trex = BoardLayout.TrexSnakes.Contains(p.square);
-            message = trex ? $"A T-REX drags {p.name} down!" : $"A vortex sucks {p.name} down!";
-            Sfx.Play("down");
-            yield return new WaitForSeconds(0.4f);
-            yield return CarryTo(p, down, BoardLayout.SnakeMarker(p.square));
-            p.square = down;
+
+            if (p.rubies > 0)   // a ruby buys you out of the black hole
+            {
+                p.rubies--;
+                bigMsg = "RUBY SAVES YOU!"; bigMsgColor = new Color(1f, 0.35f, 0.5f);
+                message = trex
+                    ? $"{p.name} spends a RUBY — the T-Rex backs off! ({p.rubies} left)"
+                    : $"{p.name} spends a RUBY — the vortex spits them out! ({p.rubies} left)";
+                Sfx.Play("shield");
+                yield return new WaitForSeconds(1.8f);
+                bigMsg = "";
+            }
+            else
+            {
+                message = trex ? $"A T-REX drags {p.name} down!" : $"A vortex sucks {p.name} down!";
+                Sfx.Play("down");
+                yield return new WaitForSeconds(0.4f);
+                yield return CarryTo(p, down, BoardLayout.SnakeMarker(p.square));
+                p.square = down;
+            }
         }
 
         if (p.square >= BoardLayout.Boss)
@@ -551,6 +579,7 @@ public class GameController : MonoBehaviour
             if (rng.Next(0, 100) >= HulkAppearPercent) yield break;
 
             hulkSquare = HulkStart;
+            hulkClimbing = false;   // fresh arrival: back to prowling his patch
             hulkToken.gameObject.SetActive(true);
             hulkToken.position = BoardLayout.SquareToWorld(hulkSquare) + HulkOffset;
             bigMsg = "HULK SMASH!"; bigMsgColor = HulkGreen;
@@ -571,23 +600,44 @@ public class GameController : MonoBehaviour
         yield return RollDie(steps, "The HULK", true);
         dieTint = Color.white;
 
+        // A snake has knocked him off his patch? Then he only climbs toward 100.
+        // Otherwise he hunts whoever is nearest, up or down the board.
         Player prey = NearestPlayer();
-        int dir = (prey != null && prey.square > hulkSquare) ? +1 : -1;  // chase up or down the board
+        int dir = hulkClimbing ? +1
+                : (prey != null && prey.square > hulkSquare) ? +1 : -1;
         string way = dir > 0 ? "UP" : "DOWN";
 
         bigMsg = $"HULK MOVES {steps}!"; bigMsgColor = HulkGreen;
-        message = prey != null
-            ? $"The HULK stomps {way} {steps} squares, hunting {prey.name}!"
-            : $"The HULK stomps {way} {steps} squares!";
+        message = hulkClimbing
+            ? $"The HULK climbs {steps} squares back toward {BoardLayout.Squares}!"
+            : prey != null
+                ? $"The HULK stomps {way} {steps} squares, hunting {prey.name}!"
+                : $"The HULK stomps {way} {steps} squares!";
         Sfx.Play("down");
         yield return new WaitForSeconds(1.3f);
         bigMsg = "";
 
         int target = hulkSquare + dir * steps;
-        // he prowls the top of the board only — past either end and he loses interest
-        if (target < HulkFloor || target > BoardLayout.Squares)
+
+        // Climbing home: reach the top and he's done — he stomps off (and may drop in again).
+        if (hulkClimbing && target >= BoardLayout.Squares)
+        {
+            yield return HulkHopTo(BoardLayout.Squares);
+            hulkSquare = -1;
+            hulkClimbing = false;
+            hulkToken.gameObject.SetActive(false);
+            message = $"The HULK climbs back to {BoardLayout.Squares} and stomps off. Phew!";
+            yield return new WaitForSeconds(1.2f);
+            zoomed = false;
+            yield return new WaitForSeconds(1.0f);
+            yield break;
+        }
+
+        // On his own patch he prowls the top of the board only — past the end and he loses interest
+        if (!hulkClimbing && (target < HulkFloor || target > BoardLayout.Squares))
         {
             hulkSquare = -1;
+            hulkClimbing = false;
             hulkToken.gameObject.SetActive(false);
             message = "The HULK gets bored and thumps away. Phew!";
             yield return new WaitForSeconds(1.2f);
@@ -603,7 +653,7 @@ public class GameController : MonoBehaviour
             yield return new WaitForSeconds(RandRange(0.04f, 0.18f));
         }
 
-        // Landed on a player? SMASH — thrown all the way back to 50.
+        // Landed on a player? SMASH — thrown all the way back to 50, pockets emptied.
         foreach (var pl in players)
         {
             if (pl.square != hulkSquare) continue;
@@ -615,12 +665,47 @@ public class GameController : MonoBehaviour
             yield return CarryTo(pl, HulkThrowTo, "ladder_hulk");
             pl.square = HulkThrowTo;
             bigMsg = "";
+            yield return HulkRobs(pl);   // and he takes every ruby they had
+            followTarget = hulkToken;
             break;
+        }
+
+        // Did HE land on a snake? Down he goes — and from then on he only ever
+        // climbs back toward 100, no matter where the players are.
+        if (BoardLayout.Snakes.TryGetValue(hulkSquare, out int hulkDown))
+        {
+            bool trex = BoardLayout.TrexSnakes.Contains(hulkSquare);
+            bigMsg = "HULK FALLS!"; bigMsgColor = HulkGreen;
+            message = trex
+                ? $"A T-REX drags the HULK down to {hulkDown} — now he's climbing back to {BoardLayout.Squares}!"
+                : $"A vortex sucks the HULK down to {hulkDown} — now he's climbing back to {BoardLayout.Squares}!";
+            Sfx.Play("down");
+            yield return new WaitForSeconds(1.0f);
+            yield return HulkCarryTo(hulkDown, BoardLayout.SnakeMarker(hulkSquare));
+            hulkSquare = hulkDown;
+            hulkClimbing = true;   // he's below his patch now: only ever upward from here
+            bigMsg = "";
+            yield return new WaitForSeconds(0.6f);
         }
 
         yield return new WaitForSeconds(0.7f);
         zoomed = false;
         yield return new WaitForSeconds(1.0f);
+    }
+
+    // Either Hulk — the one on the ladder at 36, or the one prowling from 100 —
+    // empties your pockets of every ruby you're carrying.
+    IEnumerator HulkRobs(Player p)
+    {
+        int lost = p.rubies;
+        if (lost <= 0) yield break;
+        p.rubies = 0;
+        bigMsg = lost == 1 ? "HULK TAKES YOUR RUBY!" : "HULK TAKES YOUR RUBIES!";
+        bigMsgColor = HulkGreen;
+        message = $"The HULK shakes {lost} ruby{(lost == 1 ? "" : "s")} out of {p.name}'s pockets!";
+        Sfx.Play("roar", 0.8f);
+        yield return new WaitForSeconds(1.8f);
+        bigMsg = "";
     }
 
     // Whoever is closest to him along the board — that's who he goes after.
@@ -656,6 +741,41 @@ public class GameController : MonoBehaviour
         hulkToken = go.transform;
     }
 
+    // Drag the Hulk himself along a snake, with the snake's art riding alongside.
+    IEnumerator HulkCarryTo(int toSquare, string markerTex)
+    {
+        GameObject carrier = null;
+        var tex = Resources.Load<Texture2D>(markerTex);
+        if (tex != null)
+        {
+            carrier = new GameObject("HulkCarrier");
+            var csr = carrier.AddComponent<SpriteRenderer>();
+            csr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                       new Vector2(0.5f, 0.5f), tex.width);
+            csr.sortingOrder = 8;
+            float tgt = BoardLayout.Cell * 0.95f;
+            float w = csr.sprite.bounds.size.x;
+            if (w > 0.001f) carrier.transform.localScale = Vector3.one * (tgt / w);
+        }
+
+        Vector3 start = hulkToken.position;
+        Vector3 end = BoardLayout.SquareToWorld(toSquare) + HulkOffset;
+        float dur = 1.3f, t = 0f;
+        while (t < dur)
+        {
+            t += Time.deltaTime;
+            float f = t / dur;
+            Vector3 pos = Vector3.Lerp(start, end, f);
+            pos.y += Mathf.Sin(f * Mathf.PI) * 0.5f;
+            hulkToken.position = new Vector3(pos.x, pos.y, start.z);
+            if (carrier != null)
+                carrier.transform.position = new Vector3(pos.x, pos.y + 0.45f, start.z - 1f);
+            yield return null;
+        }
+        hulkToken.position = end;
+        if (carrier != null) Destroy(carrier);
+    }
+
     IEnumerator HulkHopTo(int toSquare)
     {
         Vector3 start = hulkToken.position;
@@ -686,7 +806,7 @@ public class GameController : MonoBehaviour
             int cand = Mathf.Min(baseSq + rng.Next(3, 13), 99);
             if (cand < 2) continue;
             if (BoardLayout.Ladders.ContainsKey(cand) || BoardLayout.Snakes.ContainsKey(cand)
-                || BoardLayout.Collectibles.Contains(cand)) continue;
+                || BoardLayout.Collectibles.Contains(cand) || BoardLayout.Rubies.Contains(cand)) continue;
             sq = cand; break;
         }
         if (sq < 0) return;
@@ -726,6 +846,30 @@ public class GameController : MonoBehaviour
             if (diamond != null) diamond.gameObject.SetActive(false);
             diamondSquare = -1;
         }
+    }
+
+    // Rubies work like coins, except your pockets only hold MaxRubies. If you're
+    // already full the ruby stays on the board for someone else.
+    void TryRuby(Player p, int sq)
+    {
+        if (!BoardLayout.Rubies.Contains(sq) || rubiesTaken.Contains(sq)) return;
+
+        if (p.rubies >= MaxRubies)
+        {
+            message = $"{p.name} found a ruby but already carries {MaxRubies} — it stays put!";
+            return;
+        }
+
+        rubiesTaken.Add(sq);
+        p.rubies++;
+        Sfx.Play("coin");
+        var ruby = GameObject.Find($"Ruby_{sq}");
+        if (ruby != null)
+        {
+            var sr = ruby.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = false;
+        }
+        message = $"{p.name} pocketed a RUBY! It saves you from one snake. ({p.rubies}/{MaxRubies})";
     }
 
     void TryCollect(Player p, int sq)
@@ -957,6 +1101,10 @@ public class GameController : MonoBehaviour
     {
         EnsureStyles();
 
+        // modal overlays sit on top of everything, including the setup screens
+        if (showCredits) { DrawCredits(); return; }
+        if (showRules) { DrawRules(); return; }
+
         if (choosingCount) { DrawPlayerCount(); DrawSystemButtons(); return; }
         if (players == null) return;
         if (selecting) { DrawGallery(); DrawSystemButtons(); return; }
@@ -975,7 +1123,7 @@ public class GameController : MonoBehaviour
             string arrow = (i == current && !won) ? "▶ " : "   ";
             string where = p.square < 1 ? "start" : $"square {p.square}";
             GUI.Label(new Rect(28, 22 + i * rowH, 360, rowH),
-                      $"{arrow}{p.name}:  {where}   coins {p.stars}", turnStyle);
+                      $"{arrow}{p.name}:  {where}   coins {p.stars}   rubies {p.rubies}", turnStyle);
         }
 
         GUI.Label(new Rect(28, 26 + listH, 360, 50), message, labelStyle);
@@ -1040,6 +1188,8 @@ public class GameController : MonoBehaviour
         GUI.Label(new Rect(box.x + 88, box.y, bw - 96, bh), $"{p.name.ToUpper()}'S TURN", st);
     }
 
+    const float ArrowHueSpeed = 0.55f;   // full trips round the rainbow per second
+
     void DrawTurnArrow()
     {
         if (cam == null) return;
@@ -1048,10 +1198,21 @@ public class GameController : MonoBehaviour
         if (sp.z < 0) return;
         float bob = Mathf.Sin(Time.time * 4f) * 8f;
         float gy = Screen.height - sp.y;
+
+        // cycle the arrow through the rainbow so it's impossible to miss
+        float hue = Mathf.Repeat(Time.time * ArrowHueSpeed, 1f);
+        Color rainbow = Color.HSVToRGB(hue, 0.85f, 1f);
+
         var st = new GUIStyle(GUI.skin.label)
         { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        st.normal.textColor = p.color;
-        GUI.Label(new Rect(sp.x - 34f, gy - 96f - bob, 68f, 52f), "▼", st);
+        var r = new Rect(sp.x - 34f, gy - 96f - bob, 68f, 52f);
+
+        // dark outline first, so bright hues still read against the board
+        st.normal.textColor = new Color(0f, 0f, 0f, 0.65f);
+        GUI.Label(new Rect(r.x + 3f, r.y + 3f, r.width, r.height), "▼", st);
+
+        st.normal.textColor = rainbow;
+        GUI.Label(r, "▼", st);
     }
 
     void DrawBigMsg()
@@ -1069,17 +1230,232 @@ public class GameController : MonoBehaviour
     void DrawSystemButtons()
     {
         float w = 150f, h = 44f, m = 15f;
-        var newRect = new Rect(Screen.width - w - m, m, w, h);
-        var quitRect = new Rect(Screen.width - w - m, m + h + 8f, w, h);
-        var musicRect = new Rect(Screen.width - w - m, m + 2 * (h + 8f), w, h);
-        var sfxRect = new Rect(Screen.width - w - m, m + 3 * (h + 8f), w, h);
+        float Row(int i) => m + i * (h + 8f);
+        var newRect = new Rect(Screen.width - w - m, Row(0), w, h);
+        var quitRect = new Rect(Screen.width - w - m, Row(1), w, h);
+        var musicRect = new Rect(Screen.width - w - m, Row(2), w, h);
+        var sfxRect = new Rect(Screen.width - w - m, Row(3), w, h);
+        var rulesRect = new Rect(Screen.width - w - m, Row(4), w, h);
+        var credRect = new Rect(Screen.width - w - m, Row(5), w, h);
+
         if (!confirmingReset && GUI.Button(newRect, "NEW GAME", buttonStyle)) confirmingReset = true;
         if (!confirmingReset && GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
         if (!confirmingReset && GUI.Button(musicRect, $"Music: {(Sfx.MusicOn ? "On" : "Off")}", buttonStyle))
             Sfx.SetMusic(!Sfx.MusicOn);
         if (!confirmingReset && GUI.Button(sfxRect, $"SFX: {(Sfx.FxOn ? "On" : "Off")}", buttonStyle))
             Sfx.SetFx(!Sfx.FxOn);
+        if (!confirmingReset && GUI.Button(rulesRect, "HOW TO PLAY", buttonStyle))
+        {
+            Sfx.Play("click");
+            showRules = true;
+        }
+        if (!confirmingReset && GUI.Button(credRect, "CREDITS", buttonStyle))
+        {
+            Sfx.Play("win", 0.7f);
+            partyStart = Time.time;
+            showCredits = true;
+        }
         DrawConfirm();
+    }
+
+    // ---------------------------------------------------------------- HOW TO PLAY
+
+    // What every piece on the board does. Kept in one place so the rules screen
+    // can't drift away from the code that implements them.
+    static readonly string[,] RuleRows =
+    {
+        { "🎲", "Roll the die", "Move that many squares. Roll a 6 and you go again — the rolls are added up (6 + 2 = 8)." },
+        { "🏁", "Reach 100", "First one to square 100 beats the boss and wins the whole game." },
+        { "🚀", "Spaceship (ladder)", "Land on its square and it flies you UP the board." },
+        { "🌀", "Vortex (snake)", "Land on it and it sucks you DOWN the board." },
+        { "🦖", "T-Rex (snake)", "Same as a vortex — he drags you back down." },
+        { "🪙", "Coin", "Land on one to pocket it. A coin shields you from ONE pterodactyl, then it's used up." },
+        { "💎", "Diamond", "Hops around, always a few squares ahead of whoever's turn it is. Shields like a coin." },
+        { "♦", "Ruby", "10 on the board, carry up to 3. A ruby saves you from ONE snake — it's spent to stop the fall." },
+        { "🦅", "Pterodactyl", "Flies around. Touch one and he drops you back to square 10 — but only ONCE each per game." },
+        { "🛸", "Flying spaceship", "Touch one and it beams you up to square 90. Already past 90? It just flies on by." },
+        { "💪", "HULK on square 36", "He carries you up the board — then shakes ALL your rubies out of your pockets." },
+        { "💚", "The roaming HULK", "Drops in at 100, rolls a GREEN die and stomps toward the nearest player. Lands on you? Back to square 50, and he takes all your rubies. A snake can knock him down — then he only climbs back to 100." },
+    };
+
+    void DrawRules()
+    {
+        DrawSetupBackdrop();
+
+        var title = new GUIStyle(GUI.skin.label)
+        { fontSize = 42, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        title.normal.textColor = new Color(1f, 0.85f, 0.2f);
+        GUI.Label(new Rect(0, 24, Screen.width, 56), "HOW TO PLAY", title);
+
+        var name = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
+        var body = new GUIStyle(GUI.skin.label) { fontSize = 17, wordWrap = true };
+        body.normal.textColor = new Color(0.88f, 0.9f, 0.95f);
+
+        float m = Mathf.Max(40f, Screen.width * 0.08f);
+        float y = 96f;
+        float rowH = Mathf.Max(46f, (Screen.height - 190f) / RuleRows.GetLength(0));
+        float nameW = 230f;
+
+        for (int i = 0; i < RuleRows.GetLength(0); i++)
+        {
+            name.normal.textColor = TokenColors[i % TokenColors.Length];
+            GUI.Label(new Rect(m, y, nameW, rowH), $"{RuleRows[i, 0]}  {RuleRows[i, 1]}", name);
+            GUI.Label(new Rect(m + nameW + 10f, y, Screen.width - m * 2f - nameW - 10f, rowH),
+                      RuleRows[i, 2], body);
+            y += rowH;
+        }
+
+        float bw = 220f, bh = 54f;
+        if (GUI.Button(new Rect((Screen.width - bw) / 2f, Screen.height - bh - 22f, bw, bh),
+                       "GOT IT!  ▶", buttonStyle))
+        {
+            Sfx.Play("click");
+            showRules = false;
+        }
+    }
+
+    // ------------------------------------------------------------------- CREDITS
+
+    // Deterministic per-particle randomness — no state to store, and it can't
+    // use Random because OnGUI runs every frame.
+    static float Hash(int i, float salt) =>
+        Mathf.Repeat(Mathf.Sin(i * 12.9898f + salt * 78.233f) * 43758.5453f, 1f);
+
+    static readonly Color[] PartyColors =
+    {
+        new Color(1f, 0.30f, 0.35f), new Color(1f, 0.80f, 0.20f), new Color(0.35f, 0.85f, 1f),
+        new Color(0.45f, 0.95f, 0.45f), new Color(1f, 0.55f, 0.85f), new Color(0.75f, 0.60f, 1f),
+    };
+
+    void DrawCredits()
+    {
+        Color oldc = GUI.color;
+        GUI.color = new Color(0.05f, 0.02f, 0.14f, 0.97f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = oldc;
+
+        float t = Time.time - partyStart;
+
+        DrawBalloons(t);
+        DrawTickerTape(t);
+
+        // the words, big — with a soft drop shadow so they sit over the party
+        void Big(string text, float yFrac, int size, Color col, float wobble)
+        {
+            var st = new GUIStyle(GUI.skin.label)
+            { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            float bob = Mathf.Sin(t * 2f + wobble) * 6f;
+            var r = new Rect(0, Screen.height * yFrac + bob, Screen.width, size + 24f);
+            st.normal.textColor = new Color(0f, 0f, 0f, 0.55f);
+            GUI.Label(new Rect(r.x + 4f, r.y + 5f, r.width, r.height), text, st);
+            st.normal.textColor = col;
+            GUI.Label(r, text, st);
+        }
+
+        float s = Mathf.Min(Screen.width / 1000f, 1.4f);   // scale the words to the window
+        // the birthday line cycles through the party colours
+        Color rainbow = Color.HSVToRGB(Mathf.Repeat(t * 0.35f, 1f), 0.75f, 1f);
+
+        Big("CODED BY DADDY", 0.16f, Mathf.RoundToInt(64 * s), new Color(0.45f, 0.95f, 1f), 0f);
+        Big("FOR MONTY", 0.36f, Mathf.RoundToInt(86 * s), new Color(1f, 0.85f, 0.25f), 1.1f);
+        Big("HAPPY 5th BIRTHDAY!", 0.58f, Mathf.RoundToInt(72 * s), rainbow, 2.2f);
+
+        var sub = new GUIStyle(GUI.skin.label)
+        { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Italic };
+        sub.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
+        GUI.Label(new Rect(0, Screen.height * 0.76f, Screen.width, 40),
+                  "Dino and Cat drawn by Monty", sub);
+
+        float bw = 220f, bh = 54f;
+        if (GUI.Button(new Rect((Screen.width - bw) / 2f, Screen.height - bh - 22f, bw, bh),
+                       "BACK  ▶", buttonStyle))
+        {
+            Sfx.Play("click");
+            showCredits = false;
+        }
+    }
+
+    // Ticker tape: little rectangles fluttering down, spinning as they fall.
+    void DrawTickerTape(float t)
+    {
+        const int Count = 90;
+        Color oldc = GUI.color;
+        Matrix4x4 oldm = GUI.matrix;
+
+        for (int i = 0; i < Count; i++)
+        {
+            float x = Hash(i, 1f) * Screen.width;
+            float speed = 60f + Hash(i, 2f) * 130f;                  // px per second
+            float fall = Mathf.Repeat(t * speed + Hash(i, 3f) * Screen.height, Screen.height + 60f);
+            float y = fall - 30f;
+
+            float sway = Mathf.Sin(t * (1.5f + Hash(i, 4f) * 2f) + i) * 26f;
+            float w = 7f + Hash(i, 5f) * 7f;
+            float h = 13f + Hash(i, 6f) * 12f;
+            var r = new Rect(x + sway, y, w, h);
+
+            GUI.color = PartyColors[i % PartyColors.Length];
+            GUIUtility.RotateAroundPivot((t * (90f + Hash(i, 7f) * 260f)) % 360f, r.center);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            GUI.matrix = oldm;
+        }
+        GUI.color = oldc;
+    }
+
+    // Balloons: rise up the screen, swaying, each on a little string.
+    void DrawBalloons(float t)
+    {
+        const int Count = 10;
+        EnsureBalloonTex();
+        Color oldc = GUI.color;
+
+        for (int i = 0; i < Count; i++)
+        {
+            float x = 40f + Hash(i, 11f) * (Screen.width - 80f);
+            float speed = 35f + Hash(i, 12f) * 45f;
+            float rise = Mathf.Repeat(t * speed + Hash(i, 13f) * (Screen.height + 260f), Screen.height + 260f);
+            float y = Screen.height + 130f - rise;                   // bottom -> top
+
+            float sway = Mathf.Sin(t * (0.8f + Hash(i, 14f)) + i * 1.7f) * 30f;
+            float bw = 58f + Hash(i, 15f) * 34f;
+            float bh = bw * 1.25f;
+            var r = new Rect(x + sway, y, bw, bh);
+
+            GUI.color = PartyColors[(i + 2) % PartyColors.Length];
+            GUI.DrawTexture(r, balloonTex, ScaleMode.StretchToFill, true);
+
+            // string
+            GUI.color = new Color(1f, 1f, 1f, 0.5f);
+            GUI.DrawTexture(new Rect(r.center.x - 1f, r.yMax - 2f, 2f, bh * 0.55f), Texture2D.whiteTexture);
+        }
+        GUI.color = oldc;
+    }
+
+    void EnsureBalloonTex()
+    {
+        if (balloonTex != null) return;
+        int w = 64, h = 80;
+        balloonTex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        Vector2 c = new Vector2(w / 2f, h * 0.42f);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                // ellipse body...
+                float dx = (x - c.x) / (w * 0.46f);
+                float dy = (y - c.y) / (h * 0.42f);
+                bool inBody = dx * dx + dy * dy <= 1f;
+                // ...plus a little knot at the bottom
+                bool inKnot = Mathf.Abs(x - c.x) < 4f && y > h * 0.80f && y < h * 0.90f;
+                bool on = inBody || inKnot;
+
+                // a soft highlight so it reads as a balloon, not a blob
+                float hi = Mathf.Clamp01(1f - new Vector2(x - w * 0.34f, y - h * 0.26f).magnitude / (w * 0.28f));
+                Color col = on ? Color.Lerp(Color.white, Color.white * 1.6f, hi * 0.9f) : new Color(0, 0, 0, 0);
+                if (on) col.a = 1f;
+                balloonTex.SetPixel(x, y, col);
+            }
+        balloonTex.Apply();
+        balloonTex.filterMode = FilterMode.Bilinear;
     }
 
     void DrawConfirm()
@@ -1116,13 +1492,19 @@ public class GameController : MonoBehaviour
 #endif
     }
 
-    void DrawGallery()
+    // The setup screens sit on a near-solid backdrop: the board behind them is
+    // busy (animated snakes, roaming flyers), and it fought with the avatars.
+    void DrawSetupBackdrop()
     {
-        // dim the board behind the gallery
         Color oldc = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.color = new Color(0.05f, 0.06f, 0.13f, 0.97f);
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = oldc;
+    }
+
+    void DrawGallery()
+    {
+        DrawSetupBackdrop();
 
         var title = new GUIStyle(GUI.skin.label)
         { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
@@ -1156,7 +1538,7 @@ public class GameController : MonoBehaviour
             GUI.enabled = !taken;
 
             // tile background
-            GUI.color = taken ? new Color(0.3f, 0.3f, 0.3f, 0.8f) : new Color(1f, 1f, 1f, 0.10f);
+            GUI.color = taken ? new Color(0.22f, 0.22f, 0.26f, 0.95f) : new Color(1f, 1f, 1f, 0.22f);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
@@ -1179,10 +1561,7 @@ public class GameController : MonoBehaviour
     // First screen: how many people are playing?
     void DrawPlayerCount()
     {
-        Color oldc = GUI.color;
-        GUI.color = new Color(0f, 0f, 0f, 0.6f);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-        GUI.color = oldc;
+        DrawSetupBackdrop();
 
         var title = new GUIStyle(GUI.skin.label)
         { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
@@ -1232,6 +1611,7 @@ public class GameController : MonoBehaviour
         rollsSinceDiamond = 0;
         if (diamond != null) diamond.gameObject.SetActive(false);
         hulkSquare = -1;
+        hulkClimbing = false;
         if (hulkToken != null) hulkToken.gameObject.SetActive(false);
 
         // all the way back to "how many players?" for a fresh game
@@ -1243,6 +1623,7 @@ public class GameController : MonoBehaviour
         selecting = false;
         choosingCount = true;
         message = "How many players?";
+
         starsTaken.Clear();
         foreach (int n in BoardLayout.Collectibles)
         {
@@ -1250,6 +1631,17 @@ public class GameController : MonoBehaviour
             if (star != null)
             {
                 var sr = star.GetComponent<SpriteRenderer>();
+                if (sr != null) sr.enabled = true;
+            }
+        }
+
+        rubiesTaken.Clear();
+        foreach (int n in BoardLayout.Rubies)
+        {
+            var ruby = GameObject.Find($"Ruby_{n}");
+            if (ruby != null)
+            {
+                var sr = ruby.GetComponent<SpriteRenderer>();
                 if (sr != null) sr.enabled = true;
             }
         }
