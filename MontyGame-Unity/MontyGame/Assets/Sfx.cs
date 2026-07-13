@@ -195,6 +195,38 @@ public static class Sfx
         }
     }
 
+    // A monster ROAR: a low growling fundamental (+ harmonics) that swells and
+    // falls, wobbled fast for the "grrr", with rasp noise on top. The signal is
+    // deliberately driven past 1.0 so the clip in Make() adds a throaty grit.
+    static void Roar(float[] b, float amp)
+    {
+        float dur = (float)b.Length / SR;
+        float ph1 = 0f, ph2 = 0f, ph3 = 0f;
+        for (int i = 0; i < b.Length; i++)
+        {
+            float t = (float)i / SR;
+            float u = t / dur;
+
+            // pitch swells up as he winds up, then sags as the roar dies
+            float f = Mathf.Lerp(70f, 125f, Mathf.Sin(Mathf.Clamp01(u * 1.7f) * Mathf.PI * 0.5f));
+            f *= 1f - 0.35f * Mathf.Clamp01((u - 0.55f) / 0.45f);
+            f *= 1f + 0.10f * Mathf.Sin(2f * Mathf.PI * 23f * t);   // growl wobble
+            f *= 1f + 0.04f * Mathf.Sin(2f * Mathf.PI * 5.5f * t);  // slower chest rumble
+
+            ph1 += 2f * Mathf.PI * f / SR;
+            ph2 += 2f * Mathf.PI * f * 2f / SR;
+            ph3 += 2f * Mathf.PI * f * 3f / SR;
+
+            float body = Mathf.Sin(ph1) + 0.6f * Mathf.Sin(ph2) + 0.35f * Mathf.Sin(ph3);
+            float rasp = (float)(rng.NextDouble() * 2 - 1)
+                       * 0.4f * (0.35f + 0.65f * Mathf.Abs(Mathf.Sin(ph1)));
+
+            float env = Mathf.Min(1f, u / 0.05f)          // snarling attack
+                      * Mathf.Min(1f, (1f - u) / 0.30f);  // long tail
+            b[i] += (body + rasp) * 0.55f * amp * env;
+        }
+    }
+
     static AudioClip Make(string name, float[] b)
     {
         // soft clip to avoid harshness
@@ -227,6 +259,16 @@ public static class Sfx
                 b = Buf(0.25f);
                 Tone(b, 0f, 0.12f, 1500, 1500, 0.3f, true);
                 Tone(b, 0.08f, 0.16f, 2100, 2100, 0.25f, true);
+                break;
+            case "roar":            // the Hulk arrives
+                b = Buf(1.5f);
+                Roar(b, 1.15f);     // >1 on purpose — Make() clips it into a snarl
+                break;
+            case "smash":           // ...and catches somebody: roar + a heavy thud
+                b = Buf(1.6f);
+                Roar(b, 1.1f);
+                Tone(b, 0f, 0.45f, 220, 55, 0.5f, true);
+                NoiseTick(b, 0.18f, 0.35f);
                 break;
             case "win":
                 b = Buf(0.7f);

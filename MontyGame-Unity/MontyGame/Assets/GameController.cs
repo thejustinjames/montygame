@@ -65,10 +65,10 @@ public class GameController : MonoBehaviour
     private bool confirmingReset = false; // showing the "start a new game?" prompt
     private int picking = 0;            // which player is currently choosing
     private readonly int[] chosen = { -1, -1 }; // avatar index each player picked
-    private const int AvatarCount = 6;
-    private Texture2D[] avatarTex;      // avatar_1..avatar_6
+    private const int AvatarCount = 7;
+    private Texture2D[] avatarTex;      // avatar_1..avatar_7
     private static readonly string[] AvatarNames =
-        { "Dino", "Cat", "Rex", "Robo", "Rocket", "Star" };
+        { "Dino", "Cat", "Rex", "Robo", "Saucer", "Goldbot", "Bleep" };
 
     // --- random flying hazards/bonuses ---
     class Flyer { public Transform tr; public SpriteRenderer sr; public Vector2 vel; public int type; public float cd; }
@@ -78,6 +78,18 @@ public class GameController : MonoBehaviour
     const int ShipTarget = 90;        // spaceship zooms you up to 90
     private string bigMsg = "";       // big centered flash message
     private Color bigMsgColor = Color.white;
+
+    // --- the HULK: drops in at 100 and stomps back DOWN the board like a
+    //     third player moving in reverse. Land on him and he throws you to 50.
+    private Transform hulkToken;
+    private int hulkSquare = -1;                        // < 1 = not on the board
+    const int HulkStart = BoardLayout.Squares;          // he drops in at 100
+    const int HulkRange = 20;                           // ...and roams no more than 20 squares
+    const int HulkFloor = BoardLayout.Squares - HulkRange;
+    const int HulkThrowTo = 50;                         // smashed players land here
+    const int HulkAppearPercent = 35;                   // chance he shows up on any given turn
+    static readonly Vector3 HulkOffset = new Vector3(0f, 0.22f, -2.6f);
+    static readonly Color HulkGreen = new Color(0.45f, 1f, 0.35f);
 
     IEnumerator Start()
     {
@@ -427,6 +439,8 @@ public class GameController : MonoBehaviour
         zoomed = false;
         yield return new WaitForSeconds(1.4f);
 
+        yield return HulkTurn();   // the Hulk takes his (reverse) turn
+
         current = 1 - current;
 
         // every few rolls the diamond (re)appears ahead of the next player
@@ -435,6 +449,117 @@ public class GameController : MonoBehaviour
 
         message = $"{players[current].name}'s turn — press ROLL!";
         busy = false;
+    }
+
+    // The HULK's turn. He appears at 100, then each turn rolls 1-6 and stomps
+    // that many squares DOWN the board (the reverse of a player). He never goes
+    // below HulkFloor — if his roll would take him past it he leaves the board.
+    IEnumerator HulkTurn()
+    {
+        EnsureHulk();
+
+        if (hulkSquare < 1)
+        {
+            if (rng.Next(0, 100) >= HulkAppearPercent) yield break;
+
+            hulkSquare = HulkStart;
+            hulkToken.gameObject.SetActive(true);
+            hulkToken.position = BoardLayout.SquareToWorld(hulkSquare) + HulkOffset;
+            bigMsg = "HULK SMASH!"; bigMsgColor = HulkGreen;
+            message = $"The HULK lands on {HulkStart} — he's coming DOWN the board!";
+            Sfx.Play("roar", 0.9f);
+            followTarget = hulkToken; zoomed = true;
+            yield return new WaitForSeconds(1.8f);
+            bigMsg = "";
+            zoomed = false;
+            yield return new WaitForSeconds(1.0f);
+            yield break;
+        }
+
+        int steps = rng.Next(1, 7);
+        bigMsg = $"HULK MOVES {steps}!"; bigMsgColor = HulkGreen;
+        message = $"The HULK stomps DOWN {steps} squares!";
+        Sfx.Play("down");
+        followTarget = hulkToken; zoomed = true;
+        yield return new WaitForSeconds(1.5f);
+        bigMsg = "";
+
+        int target = hulkSquare - steps;
+        if (target < HulkFloor)   // that would take him too far — he gives up and leaves
+        {
+            hulkSquare = -1;
+            hulkToken.gameObject.SetActive(false);
+            message = "The HULK gets bored and thumps away. Phew!";
+            yield return new WaitForSeconds(1.2f);
+            zoomed = false;
+            yield return new WaitForSeconds(1.0f);
+            yield break;
+        }
+
+        while (hulkSquare > target)
+        {
+            yield return HulkHopTo(hulkSquare - 1);
+            hulkSquare--;
+            yield return new WaitForSeconds(RandRange(0.04f, 0.18f));
+        }
+
+        // Landed on a player? SMASH — thrown all the way back to 50.
+        foreach (var pl in players)
+        {
+            if (pl.square != hulkSquare) continue;
+            bigMsg = "HULK SMASH!"; bigMsgColor = new Color(1f, 0.5f, 0.45f);
+            message = $"The HULK caught {pl.name} — thrown back to {HulkThrowTo}!";
+            Sfx.Play("smash", 0.95f);
+            yield return new WaitForSeconds(0.9f);
+            followTarget = pl.token;
+            yield return CarryTo(pl, HulkThrowTo, "ladder_hulk");
+            pl.square = HulkThrowTo;
+            bigMsg = "";
+            break;
+        }
+
+        yield return new WaitForSeconds(0.7f);
+        zoomed = false;
+        yield return new WaitForSeconds(1.0f);
+    }
+
+    void EnsureHulk()
+    {
+        if (hulkToken != null) return;
+        var go = new GameObject("Hulk");
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sortingOrder = 7;   // he towers over the player tokens
+        var tex = Resources.Load<Texture2D>("ladder_hulk");
+        if (tex != null)
+        {
+            sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
+                                      new Vector2(0.5f, 0.5f), tex.width);
+            float target = BoardLayout.Cell * 0.85f;
+            float w = sr.sprite.bounds.size.x;
+            if (w > 0.001f) go.transform.localScale = Vector3.one * (target / w);
+        }
+        go.SetActive(false);
+        hulkToken = go.transform;
+    }
+
+    IEnumerator HulkHopTo(int toSquare)
+    {
+        Vector3 start = hulkToken.position;
+        Vector3 end = BoardLayout.SquareToWorld(toSquare) + HulkOffset;
+        float dur = RandRange(0.28f, 0.50f), t = 0f;
+        Vector3 baseScale = hulkToken.localScale;
+        while (t < dur)
+        {
+            t += Time.deltaTime;
+            float f = t / dur;
+            Vector3 pos = Vector3.Lerp(start, end, f);
+            pos.y += Mathf.Sin(f * Mathf.PI) * 0.25f;   // heavy stomping arc
+            hulkToken.position = new Vector3(pos.x, pos.y, start.z);
+            hulkToken.localScale = baseScale * (1f + 0.18f * Mathf.Sin(f * Mathf.PI));
+            yield return null;
+        }
+        hulkToken.position = end;
+        hulkToken.localScale = baseScale;
     }
 
     // Diamond bonus: same effect as a coin, but it hops ahead of the player.
@@ -883,20 +1008,20 @@ public class GameController : MonoBehaviour
         { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         nameStyle.normal.textColor = Color.white;
 
-        // 3 x 2 grid of avatars
-        int cols = 3, rows = 2;
-        float cell = Mathf.Min(Screen.width / 4.2f, Screen.height / 3.4f);
+        // grid of avatars, at most 4 per row
+        int cols = Mathf.Min(4, AvatarCount);
+        int rows = Mathf.CeilToInt(AvatarCount / (float)cols);
+        float cell = Mathf.Min(Screen.width / (cols + 1.2f), Screen.height / (rows + 1.4f));
         float gap = cell * 0.28f;
-        float gridW = cols * cell + (cols - 1) * gap;
-        float gridH = rows * cell + (rows - 1) * gap;
-        float x0 = (Screen.width - gridW) / 2f;
         float y0 = Screen.height * 0.22f;
 
         for (int i = 1; i <= AvatarCount; i++)
         {
-            int idx = i - 1;
-            float cx = x0 + (idx % cols) * (cell + gap);
-            float cy = y0 + (idx / cols) * (cell + gap);
+            int idx = i - 1, row = idx / cols;
+            int inRow = Mathf.Min(cols, AvatarCount - row * cols); // last row may be short — centre it
+            float rowW = inRow * cell + (inRow - 1) * gap;
+            float cx = (Screen.width - rowW) / 2f + (idx % cols) * (cell + gap);
+            float cy = y0 + row * (cell + gap);
             var r = new Rect(cx, cy, cell, cell);
 
             bool takenByP1 = (chosen[0] == i);
@@ -936,6 +1061,8 @@ public class GameController : MonoBehaviour
         diamondSquare = -1;
         rollsSinceDiamond = 0;
         if (diamond != null) diamond.gameObject.SetActive(false);
+        hulkSquare = -1;
+        if (hulkToken != null) hulkToken.gameObject.SetActive(false);
         // back to character select for a fresh game
         selecting = true;
         picking = 0;
