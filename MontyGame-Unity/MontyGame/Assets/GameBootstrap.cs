@@ -252,33 +252,24 @@ public static class GameBootstrap
 
     static void CreateTokens()
     {
-        // Two players share the board — offset within a square so both are visible
-        CreateToken("Token_0", "Dino", new Vector3(-0.20f, 0.12f, -2.0f), new Color(1f, 0.85f, 0.2f));
-        CreateToken("Token_1", "Cat", new Vector3(0.20f, -0.12f, -2.1f), new Color(0.3f, 0.85f, 0.9f));
-        Debug.Log("✓ Dino + Cat tokens on square 1");
+        // One token per possible player. GameController shows only as many as the
+        // game actually has, and swaps in the chosen avatar's sprite on pick.
+        for (int i = 0; i < GameController.MaxPlayers; i++)
+            CreateToken($"Token_{i}", GameController.TokenOffsets[i], GameController.TokenColors[i]);
+        Debug.Log($"✓ {GameController.MaxPlayers} player tokens ready");
     }
 
-    static void CreateToken(string objName, string spriteName, Vector3 offset, Color fallback)
+    static void CreateToken(string objName, Vector3 offset, Color fallback)
     {
         var token = new GameObject(objName);
         // start just off the board, below square 1
         token.transform.position = BoardLayout.SquareToWorld(1) + new Vector3(0f, -1.25f, 0f) + offset;
 
         var sr = token.AddComponent<SpriteRenderer>();
-        sr.sprite = LoadCharacterSprite(spriteName);
+        sr.sprite = MakeSquareSprite(fallback);   // placeholder until an avatar is picked
         sr.sortingOrder = 5;
-
-        float target = BoardLayout.Cell * 0.55f; // smaller so two fit in a square
-        if (sr.sprite != null)
-        {
-            float w = sr.sprite.bounds.size.x;
-            if (w > 0.001f) token.transform.localScale = Vector3.one * (target / w);
-        }
-        else
-        {
-            sr.sprite = MakeSquareSprite(fallback);
-            token.transform.localScale = Vector3.one * target;
-        }
+        sr.enabled = false;                       // hidden until this player joins
+        token.transform.localScale = Vector3.one * GameController.TokenSize;
     }
 
     static Sprite LoadCharacterSprite(string name)

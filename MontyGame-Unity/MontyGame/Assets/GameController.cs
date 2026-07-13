@@ -18,15 +18,36 @@ public class GameController : MonoBehaviour
         public Color color;
         public int square = 0;   // 0 = off the board, waiting to roll on
         public int stars = 0;
+        public bool pteroUsed = false; // a pterodactyl may carry each player off only once per game
     }
 
+    // --- how many players can share the board, and where they sit in a square ---
+    public const int MaxPlayers = 6;
+    public const float TokenSize = BoardLayout.Cell * 0.40f;  // small enough that 6 fit in one square
+    // 3 x 2 within a square, so six tokens never fully cover each other
+    public static readonly Vector3[] TokenOffsets =
+    {
+        new Vector3(-0.26f,  0.15f, -2.0f), new Vector3(0f,  0.15f, -2.1f), new Vector3(0.26f,  0.15f, -2.2f),
+        new Vector3(-0.26f, -0.17f, -2.3f), new Vector3(0f, -0.17f, -2.4f), new Vector3(0.26f, -0.17f, -2.5f),
+    };
+    public static readonly Color[] TokenColors =
+    {
+        new Color(1f, 0.85f, 0.2f),   // yellow
+        new Color(0.3f, 0.85f, 0.9f), // cyan
+        new Color(1f, 0.5f, 0.75f),   // pink
+        new Color(0.5f, 0.95f, 0.45f),// green
+        new Color(1f, 0.6f, 0.25f),   // orange
+        new Color(0.75f, 0.6f, 1f),   // purple
+    };
+
     private Player[] players;
+    private Transform[] allTokens;       // one per possible player, built by GameBootstrap
     private int current = 0;             // whose turn
     private int lastRoll = 0;
     private bool busy = false;
     private bool won = false;
     private int winner = -1;
-    private string message = "Dino goes first — press ROLL!";
+    private string message = "How many players?";
     private readonly HashSet<int> starsTaken = new HashSet<int>();
     private readonly System.Random rng = new System.Random();
 
@@ -42,6 +63,8 @@ public class GameController : MonoBehaviour
     private float dieGroundY = 0f;  // resting baseline for the shadow
     private float dieSquash = 0f;   // +squash (wide/short), -stretch (tall/thin)
     private string popEquation = "";// e.g. "6 + 2 = 8" for chained rolls
+    private Color dieTint = Color.white;  // the HULK rolls a green die
+    static readonly Color HulkDie = new Color(0.45f, 1f, 0.45f);
 
     // --- dynamic diamond bonus (moves to stay ahead of the player) ---
     private Transform diamond;
@@ -60,15 +83,18 @@ public class GameController : MonoBehaviour
     private Texture2D dieBodyTex, pipTex, shadowTex;
     private Texture2D[] dieFaces; // realistic die images die_1..die_6
 
-    // --- character select gallery ---
-    private bool selecting = true;      // true until both players have picked
+    // --- setup screens: how many players, then everyone picks a character ---
+    private bool choosingCount = true;  // true until the player count is chosen
+    private bool selecting = false;     // true until every player has picked
     private bool confirmingReset = false; // showing the "start a new game?" prompt
     private int picking = 0;            // which player is currently choosing
-    private readonly int[] chosen = { -1, -1 }; // avatar index each player picked
+    private int[] chosen;               // avatar index each player picked (-1 = not yet)
     private const int AvatarCount = 7;
     private Texture2D[] avatarTex;      // avatar_1..avatar_7
     private static readonly string[] AvatarNames =
-        { "Dino", "Cat", "Rex", "Robo", "Saucer", "Goldbot", "Bleep" };
+        { "Cat", "(retired)", "Rex", "Robo", "Saucer", "Goldbot", "Bleep" };
+    // Slot 2 was an earlier drawing of the same cat — retired, kept on disk but not offered.
+    private static readonly int[] VisibleAvatars = { 1, 3, 4, 5, 6, 7 };
 
     // --- random flying hazards/bonuses ---
     class Flyer { public Transform tr; public SpriteRenderer sr; public Vector2 vel; public int type; public float cd; }
@@ -95,28 +121,22 @@ public class GameController : MonoBehaviour
     {
         yield return null; // let the board finish building
 
-        players = new[]
+        allTokens = new Transform[MaxPlayers];
+        for (int i = 0; i < MaxPlayers; i++)
         {
-            new Player { name = "Dino", token = GameObject.Find("Token_0").transform,
-                         offset = new Vector3(-0.20f, 0.12f, -2.0f), color = new Color(1f, 0.85f, 0.2f) },
-            new Player { name = "Cat",  token = GameObject.Find("Token_1").transform,
-                         offset = new Vector3(0.20f, -0.12f, -2.1f), color = new Color(0.3f, 0.85f, 0.9f) },
-        };
-        foreach (var p in players) PlaceToken(p);
+            var go = GameObject.Find($"Token_{i}");
+            if (go != null) allTokens[i] = go.transform;
+        }
 
         cam = Camera.main;
 
-        // load avatar gallery images and hide tokens until both players pick
         avatarTex = new Texture2D[AvatarCount + 1];
         for (int i = 1; i <= AvatarCount; i++) avatarTex[i] = Resources.Load<Texture2D>($"avatar_{i}");
-        foreach (var p in players)
-        {
-            var sr = p.token.GetComponent<SpriteRenderer>();
-            if (sr != null) sr.enabled = false;
-        }
-        selecting = true;
-        picking = 0;
-        message = "Player 1: choose your character";
+
+        HideAllTokens();
+        choosingCount = true;
+        selecting = false;
+        message = "How many players?";
 
         // spawn the random flyers
         SpawnFlyer(0); SpawnFlyer(0);   // pterodactyls
@@ -168,7 +188,7 @@ public class GameController : MonoBehaviour
         }
 
         // collisions only between turns (never mid-animation / dialog)
-        if (selecting || won || busy || confirmingReset) return;
+        if (players == null || choosingCount || selecting || won || busy || confirmingReset) return;
         foreach (var f in flyers)
         {
             if (f.cd > 0f) continue;
@@ -189,9 +209,20 @@ public class GameController : MonoBehaviour
     {
         busy = true;
 
-        // Pterodactyl: a coin shields you (consumes one), otherwise back to 10
+        // Pterodactyl: a coin shields you (consumes one), otherwise back to 10 —
+        // but he can only carry each player off ONCE per game.
         if (type == 0)
         {
+            if (pl.pteroUsed)
+            {
+                bigMsg = "Too slow!"; bigMsgColor = new Color(0.6f, 0.9f, 1f);
+                message = $"The pterodactyl swoops at {pl.name} — but he's had his turn. Nothing happens!";
+                Sfx.Play("shield", 0.5f);
+                yield return new WaitForSeconds(1.5f);
+                bigMsg = "";
+                busy = false;
+                yield break;
+            }
             if (pl.stars > 0)
             {
                 pl.stars--;
@@ -203,16 +234,27 @@ public class GameController : MonoBehaviour
                 busy = false;
                 yield break;
             }
+            pl.pteroUsed = true;   // that's his one grab of this player
             bigMsg = "Oh no!"; bigMsgColor = new Color(1f, 0.5f, 0.45f);
-            message = $"A pterodactyl grabbed {pl.name} — back to {PteroTarget}!";
+            message = $"A pterodactyl grabbed {pl.name} — back to {PteroTarget}! (Only once per game.)";
             Sfx.Play("hit");
             followTarget = pl.token; zoomed = true;
             yield return new WaitForSeconds(0.7f);
             yield return CarryTo(pl, PteroTarget, "fly_ptero");
             pl.square = PteroTarget;
         }
-        else // Spaceship: up to 90
+        else // Spaceship: up to 90 — but never DOWN. Past 90 already? It just flies by.
         {
+            if (pl.square >= ShipTarget)
+            {
+                bigMsg = "Whoosh!"; bigMsgColor = new Color(0.6f, 0.9f, 1f);
+                message = $"A spaceship buzzes {pl.name} — already past {ShipTarget}, so it flies on by!";
+                Sfx.Play("shield", 0.5f);
+                yield return new WaitForSeconds(1.5f);
+                bigMsg = "";
+                busy = false;
+                yield break;
+            }
             bigMsg = "Being beamed up!"; bigMsgColor = new Color(0.5f, 0.9f, 1f);
             message = $"A spaceship zoomed {pl.name} up to {ShipTarget}!";
             Sfx.Play("up");
@@ -229,6 +271,51 @@ public class GameController : MonoBehaviour
         busy = false;
     }
 
+    void HideAllTokens()
+    {
+        if (allTokens == null) return;
+        foreach (var t in allTokens)
+        {
+            if (t == null) continue;
+            var sr = t.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = false;
+        }
+    }
+
+    // The player count is locked in: build that many players and start the picking.
+    void StartGameWith(int count)
+    {
+        count = Mathf.Clamp(count, 1, MaxPlayers);
+        players = new Player[count];
+        for (int i = 0; i < count; i++)
+            players[i] = new Player
+            {
+                name = $"Player {i + 1}",
+                token = allTokens[i],
+                offset = TokenOffsets[i],
+                color = TokenColors[i],
+            };
+        foreach (var p in players) PlaceToken(p);
+
+        chosen = new int[count];
+        for (int i = 0; i < count; i++) chosen[i] = -1;
+
+        HideAllTokens();
+        choosingCount = false;
+        selecting = true;
+        picking = 0;
+        current = 0;
+        message = "Player 1: choose your character";
+    }
+
+    bool AvatarTaken(int avatarIndex)
+    {
+        if (chosen == null) return false;
+        for (int i = 0; i < chosen.Length; i++)
+            if (i != picking && chosen[i] == avatarIndex) return true;
+        return false;
+    }
+
     // Give a player the avatar they picked: sets name, token sprite + scale
     void AssignAvatar(Player p, int avatarIndex)
     {
@@ -239,24 +326,24 @@ public class GameController : MonoBehaviour
         sr.sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height),
                                   new Vector2(0.5f, 0.5f), tex.width);
         sr.enabled = true;
-        float target = BoardLayout.Cell * 0.55f;
         float w = sr.sprite.bounds.size.x;
-        if (w > 0.001f) p.token.localScale = Vector3.one * (target / w);
+        if (w > 0.001f) p.token.localScale = Vector3.one * (TokenSize / w);
     }
 
     void PickAvatar(int avatarIndex)
     {
-        if (avatarIndex == chosen[0]) return; // can't pick the same as player 1
+        if (AvatarTaken(avatarIndex)) return;   // someone already has this one
         chosen[picking] = avatarIndex;
         AssignAvatar(players[picking], avatarIndex);
-        if (picking == 0)
+
+        if (picking < players.Length - 1)
         {
-            picking = 1;
-            message = "Player 2: choose a different character";
+            picking++;
+            message = $"Player {picking + 1}: choose a different character";
         }
         else
         {
-            selecting = false; // both picked -> start the game
+            selecting = false;   // everyone has picked -> play
             current = 0;
             message = $"{players[0].name} goes first — press ROLL!";
         }
@@ -293,10 +380,11 @@ public class GameController : MonoBehaviour
     }
 
     // One die throw: tumbles + bounces across the screen, settles on `roll`.
-    IEnumerator RollDie(int roll, Player p, bool first)
+    // `who` is whoever is throwing it — a player, or the HULK (whose die is green).
+    IEnumerator RollDie(int roll, string who, bool first)
     {
         rolling = true;
-        if (first) message = $"{p.name} is rolling...";
+        if (first) message = $"{who} is rolling...";
         float rollTime = 2.8f;
         float cy = Screen.height * 0.42f;
         dieGroundY = cy;
@@ -355,7 +443,7 @@ public class GameController : MonoBehaviour
         do
         {
             roll = rng.Next(1, 7);
-            yield return RollDie(roll, p, rolls.Count == 0);
+            yield return RollDie(roll, p.name, rolls.Count == 0);
             rolls.Add(roll);
             if (roll == 6 && rolls.Count < 4)
             {
@@ -441,7 +529,7 @@ public class GameController : MonoBehaviour
 
         yield return HulkTurn();   // the Hulk takes his (reverse) turn
 
-        current = 1 - current;
+        current = (current + 1) % players.Length;
 
         // every few rolls the diamond (re)appears ahead of the next player
         rollsSinceDiamond += rolls.Count;
@@ -466,7 +554,7 @@ public class GameController : MonoBehaviour
             hulkToken.gameObject.SetActive(true);
             hulkToken.position = BoardLayout.SquareToWorld(hulkSquare) + HulkOffset;
             bigMsg = "HULK SMASH!"; bigMsgColor = HulkGreen;
-            message = $"The HULK lands on {HulkStart} — he's coming DOWN the board!";
+            message = $"The HULK lands on {HulkStart} — and he's hunting the nearest player!";
             Sfx.Play("roar", 0.9f);
             followTarget = hulkToken; zoomed = true;
             yield return new WaitForSeconds(1.8f);
@@ -476,16 +564,28 @@ public class GameController : MonoBehaviour
             yield break;
         }
 
+        // He rolls his own die — green — then hunts the nearest player with it.
         int steps = rng.Next(1, 7);
-        bigMsg = $"HULK MOVES {steps}!"; bigMsgColor = HulkGreen;
-        message = $"The HULK stomps DOWN {steps} squares!";
-        Sfx.Play("down");
+        dieTint = HulkDie;
         followTarget = hulkToken; zoomed = true;
-        yield return new WaitForSeconds(1.5f);
+        yield return RollDie(steps, "The HULK", true);
+        dieTint = Color.white;
+
+        Player prey = NearestPlayer();
+        int dir = (prey != null && prey.square > hulkSquare) ? +1 : -1;  // chase up or down the board
+        string way = dir > 0 ? "UP" : "DOWN";
+
+        bigMsg = $"HULK MOVES {steps}!"; bigMsgColor = HulkGreen;
+        message = prey != null
+            ? $"The HULK stomps {way} {steps} squares, hunting {prey.name}!"
+            : $"The HULK stomps {way} {steps} squares!";
+        Sfx.Play("down");
+        yield return new WaitForSeconds(1.3f);
         bigMsg = "";
 
-        int target = hulkSquare - steps;
-        if (target < HulkFloor)   // that would take him too far — he gives up and leaves
+        int target = hulkSquare + dir * steps;
+        // he prowls the top of the board only — past either end and he loses interest
+        if (target < HulkFloor || target > BoardLayout.Squares)
         {
             hulkSquare = -1;
             hulkToken.gameObject.SetActive(false);
@@ -496,10 +596,10 @@ public class GameController : MonoBehaviour
             yield break;
         }
 
-        while (hulkSquare > target)
+        while (hulkSquare != target)
         {
-            yield return HulkHopTo(hulkSquare - 1);
-            hulkSquare--;
+            yield return HulkHopTo(hulkSquare + dir);
+            hulkSquare += dir;
             yield return new WaitForSeconds(RandRange(0.04f, 0.18f));
         }
 
@@ -521,6 +621,20 @@ public class GameController : MonoBehaviour
         yield return new WaitForSeconds(0.7f);
         zoomed = false;
         yield return new WaitForSeconds(1.0f);
+    }
+
+    // Whoever is closest to him along the board — that's who he goes after.
+    Player NearestPlayer()
+    {
+        Player best = null;
+        int bestDist = int.MaxValue;
+        foreach (var pl in players)
+        {
+            if (pl.square < 1) continue;   // still waiting to get on the board
+            int d = Mathf.Abs(pl.square - hulkSquare);
+            if (d < bestDist) { bestDist = d; best = pl; }
+        }
+        return best;
     }
 
     void EnsureHulk()
@@ -787,6 +901,10 @@ public class GameController : MonoBehaviour
         Rect r = new Rect(diePos.x - w / 2f, diePos.y - hgt / 2f, w, hgt);
         Texture2D tex = FaceTex(face);
         Matrix4x4 old = GUI.matrix;
+        Color oldColor = GUI.color;
+        Color oldBg = GUI.backgroundColor;
+        GUI.color = dieTint;             // green while the HULK is rolling
+        GUI.backgroundColor = dieTint;
         GUIUtility.RotateAroundPivot(angle, r.center);
         if (tex != null)
         {
@@ -801,6 +919,8 @@ public class GameController : MonoBehaviour
                                          r.y + p.y * r.height - pip / 2f, pip, pip), pipTex);
         }
         GUI.matrix = old;
+        GUI.color = oldColor;
+        GUI.backgroundColor = oldBg;
     }
 
     void DrawNumberPop(int face, float scale)
@@ -836,11 +956,16 @@ public class GameController : MonoBehaviour
     void OnGUI()
     {
         EnsureStyles();
-        if (players == null) return;
 
+        if (choosingCount) { DrawPlayerCount(); DrawSystemButtons(); return; }
+        if (players == null) return;
         if (selecting) { DrawGallery(); DrawSystemButtons(); return; }
 
-        GUI.Box(new Rect(15, 15, 380, 150), GUIContent.none, boxStyle);
+        // the status panel grows with the number of players
+        const float rowH = 28f;
+        float listH = players.Length * rowH;
+        float panelH = listH + 66f;
+        GUI.Box(new Rect(15, 15, 380, panelH), GUIContent.none, boxStyle);
 
         // per-player status
         for (int i = 0; i < players.Length; i++)
@@ -849,20 +974,21 @@ public class GameController : MonoBehaviour
             turnStyle.normal.textColor = p.color;
             string arrow = (i == current && !won) ? "▶ " : "   ";
             string where = p.square < 1 ? "start" : $"square {p.square}";
-            GUI.Label(new Rect(28, 22 + i * 28, 360, 28),
+            GUI.Label(new Rect(28, 22 + i * rowH, 360, rowH),
                       $"{arrow}{p.name}:  {where}   coins {p.stars}", turnStyle);
         }
 
-        GUI.Label(new Rect(28, 88, 360, 50), message, labelStyle);
+        GUI.Label(new Rect(28, 26 + listH, 360, 50), message, labelStyle);
 
         if (!won) { DrawTurnBanner(); DrawTurnArrow(); }
 
+        float btnY = 15 + panelH + 10;
         if (!busy && !won && !confirmingReset)
         {
             var cp = players[current];
             Color oldbg = GUI.backgroundColor;
             GUI.backgroundColor = cp.color;   // ROLL button in the current player's colour
-            if (GUI.Button(new Rect(15, 172, 300, 62), $"{cp.name.ToUpper()}: ROLL  🎲", buttonStyle))
+            if (GUI.Button(new Rect(15, btnY, 300, 62), $"{cp.name.ToUpper()}: ROLL  🎲", buttonStyle))
             {
                 Sfx.Play("click");
                 StartCoroutine(DoTurn());
@@ -871,7 +997,7 @@ public class GameController : MonoBehaviour
         }
         else if (won)
         {
-            if (GUI.Button(new Rect(15, 172, 250, 55), "PLAY AGAIN  ▶", buttonStyle))
+            if (GUI.Button(new Rect(15, btnY, 250, 55), "PLAY AGAIN  ▶", buttonStyle))
                 ResetGame();
         }
 
@@ -1008,27 +1134,29 @@ public class GameController : MonoBehaviour
         { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         nameStyle.normal.textColor = Color.white;
 
-        // grid of avatars, at most 4 per row
-        int cols = Mathf.Min(4, AvatarCount);
-        int rows = Mathf.CeilToInt(AvatarCount / (float)cols);
+        // grid of the avatars on offer, at most 4 per row
+        int count = VisibleAvatars.Length;
+        int cols = Mathf.Min(4, count);
+        int rows = Mathf.CeilToInt(count / (float)cols);
         float cell = Mathf.Min(Screen.width / (cols + 1.2f), Screen.height / (rows + 1.4f));
         float gap = cell * 0.28f;
         float y0 = Screen.height * 0.22f;
 
-        for (int i = 1; i <= AvatarCount; i++)
+        for (int n = 0; n < count; n++)
         {
-            int idx = i - 1, row = idx / cols;
-            int inRow = Mathf.Min(cols, AvatarCount - row * cols); // last row may be short — centre it
+            int i = VisibleAvatars[n];               // avatar slot (1..AvatarCount)
+            int row = n / cols;
+            int inRow = Mathf.Min(cols, count - row * cols); // last row may be short — centre it
             float rowW = inRow * cell + (inRow - 1) * gap;
-            float cx = (Screen.width - rowW) / 2f + (idx % cols) * (cell + gap);
+            float cx = (Screen.width - rowW) / 2f + (n % cols) * (cell + gap);
             float cy = y0 + row * (cell + gap);
             var r = new Rect(cx, cy, cell, cell);
 
-            bool takenByP1 = (chosen[0] == i);
-            GUI.enabled = !takenByP1;
+            bool taken = AvatarTaken(i);
+            GUI.enabled = !taken;
 
             // tile background
-            GUI.color = takenByP1 ? new Color(0.3f, 0.3f, 0.3f, 0.8f) : new Color(1f, 1f, 1f, 0.10f);
+            GUI.color = taken ? new Color(0.3f, 0.3f, 0.3f, 0.8f) : new Color(1f, 1f, 1f, 0.10f);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
@@ -1039,12 +1167,54 @@ public class GameController : MonoBehaviour
                                 avatarTex[i], ScaleMode.ScaleToFit, true);
             }
             GUI.Label(new Rect(r.x, r.yMax - 26, cell, 24),
-                      takenByP1 ? "TAKEN" : AvatarNames[idx], nameStyle);
+                      taken ? "TAKEN" : AvatarNames[i - 1], nameStyle);
 
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !takenByP1 && !confirmingReset)
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && !taken && !confirmingReset)
                 PickAvatar(i);
 
             GUI.enabled = true;
+        }
+    }
+
+    // First screen: how many people are playing?
+    void DrawPlayerCount()
+    {
+        Color oldc = GUI.color;
+        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = oldc;
+
+        var title = new GUIStyle(GUI.skin.label)
+        { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        title.normal.textColor = Color.white;
+        GUI.Label(new Rect(0, Screen.height * 0.16f, Screen.width, 60), "How many players?", title);
+
+        var sub = new GUIStyle(GUI.skin.label)
+        { fontSize = 20, alignment = TextAnchor.MiddleCenter };
+        sub.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
+        GUI.Label(new Rect(0, Screen.height * 0.16f + 56, Screen.width, 34),
+                  "1 player = beat the board on your own", sub);
+
+        var numStyle = new GUIStyle(GUI.skin.button)
+        { fontSize = 54, fontStyle = FontStyle.Bold };
+
+        float cell = Mathf.Min(Screen.width / 8f, Screen.height / 4.5f);
+        float gap = cell * 0.25f;
+        float totalW = MaxPlayers * cell + (MaxPlayers - 1) * gap;
+        float x0 = (Screen.width - totalW) / 2f;
+        float y = Screen.height * 0.42f;
+
+        for (int n = 1; n <= MaxPlayers; n++)
+        {
+            var r = new Rect(x0 + (n - 1) * (cell + gap), y, cell, cell);
+            Color oldbg = GUI.backgroundColor;
+            GUI.backgroundColor = TokenColors[n - 1];   // each count in the colour of the player it adds
+            if (GUI.Button(r, n.ToString(), numStyle))
+            {
+                Sfx.Play("click");
+                StartGameWith(n);
+            }
+            GUI.backgroundColor = oldbg;
         }
     }
 
@@ -1063,18 +1233,17 @@ public class GameController : MonoBehaviour
         if (diamond != null) diamond.gameObject.SetActive(false);
         hulkSquare = -1;
         if (hulkToken != null) hulkToken.gameObject.SetActive(false);
-        // back to character select for a fresh game
-        selecting = true;
-        picking = 0;
-        chosen[0] = chosen[1] = -1;
-        foreach (var p in players)
-        {
-            var sr = p.token.GetComponent<SpriteRenderer>();
-            if (sr != null) sr.enabled = false;
-        }
-        message = "Player 1: choose your character";
-        starsTaken.Clear();
+
+        // all the way back to "how many players?" for a fresh game
         foreach (var p in players) { p.square = 0; p.stars = 0; PlaceToken(p); }
+        HideAllTokens();
+        players = null;
+        chosen = null;
+        picking = 0;
+        selecting = false;
+        choosingCount = true;
+        message = "How many players?";
+        starsTaken.Clear();
         foreach (int n in BoardLayout.Collectibles)
         {
             var star = GameObject.Find($"Star_{n}");
@@ -1084,6 +1253,5 @@ public class GameController : MonoBehaviour
                 if (sr != null) sr.enabled = true;
             }
         }
-        message = "Dino goes first — press ROLL!";
     }
 }
