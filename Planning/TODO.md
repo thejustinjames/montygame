@@ -1,7 +1,39 @@
 # MontyGame Development — Master TODO List
 
-**Status:** Planning ✓ → **World 1 core logic BUILT & TESTED** ✓ (Code Easy AutoCode spec #61, 2026-07-06) → Unity shell next  
+**Status:** Planning ✓ → **World 1 core logic BUILT & TESTED** ✓ (Code Easy AutoCode spec #61, 2026-07-06) → **Unity game PLAYABLE** ✓ (2026-07-13)  
 **Target:** MVP Complete by end of Sprint 4 (8 weeks)
+
+---
+
+## THE UNITY GAME — playable ✓ (2026-07-13)
+
+The playable build is at `MontyGame-Unity/MontyGame/`. Full description:
+**`Docs/UNITY_SHELL.md`** — read it before touching the Unity project.
+
+It grew organically rather than following the sprint plan below, and **diverged from it in
+two ways worth knowing**: it plays a **10×10 / 100-square** board (not the 25-tile World 1),
+and it **re-implements the rules in Unity** rather than consuming `MontyGame.Core` (Unity
+can't load a .NET 8 / C# 11 assembly). Sprints 1–2 below are therefore *satisfied in spirit,
+not to the letter* — don't work through them item by item; reconcile them against
+`Docs/UNITY_SHELL.md` first.
+
+- [x] Unity project created; whole scene built in code on Play (`GameBootstrap.cs`) — no editor setup
+- [x] 10×10 board rendered with themed ladders (spaceships, Hulk) and snakes (vortexes, T-Rex)
+- [x] Two-player pass-and-play turn loop, animated die, roll-again-on-6 with the sum shown as an equation
+- [x] Coins (land-only) + a dynamic diamond that hops ahead of the player
+- [x] Roaming pterodactyls (back to 10, blocked by a coin shield) and spaceships (up to 90)
+- [x] The HULK: drops in at 100, stomps *down* 1–6 squares a turn, roams no lower than 80, throws a caught player back to 50 — with a roar
+- [x] Character select: 7 avatars (Dino, Cat, Rex, Robo, Saucer, Goldbot, Bleep)
+- [x] Procedural audio: 1980s-arcade chiptune loop + all SFX synthesized in code; Music/SFX toggles
+- [x] Cinematic camera (zooms to the active player, pulls back between turns)
+
+### Next on the Unity build
+- [ ] **Replace the placeholder avatars with original art** — Goldbot/Bleep/Hulk are trademarked characters and the Rex/Saucer images are someone else's copyright. Blocking for any release.
+- [ ] Decide the board question: keep the 100-square board, or port the 25-tile World 1 (`Docs/WORLD_1_LAYOUT.md`) into Unity
+- [ ] Story beats (intro → halfway → boss warning → victory) — currently absent from the Unity build
+- [ ] Solo mode (the Unity build is 2-player only; Core supports solo)
+- [ ] Main menu / game-over flow beyond the current IMGUI HUD
+- [ ] Should coins shield against the Hulk the way they do against pterodactyls? (Currently no.)
 
 ---
 

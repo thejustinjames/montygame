@@ -2,10 +2,17 @@
 
 **MontyGame** is a **game development project** for ages 5–7: a platformer-board hybrid blending Snakes & Ladders mechanics with Donkey Kong platforming, set in a colorful space-dinosaur adventure.
 
-**Status:** Planning ✓ → **World 1 game logic BUILT & TESTED** ✓ (Code Easy AutoCode, spec #61, 2026-07-06) → Unity shell next  
-**Tech Stack:** Unity Personal Edition (presentation shell) over **MontyGame.Core** — an engine-agnostic .NET 8 class library (see `Docs/adr/0001-engine-agnostic-core-library.md`)  
+**Status:** Planning ✓ → **World 1 game logic BUILT & TESTED** ✓ (Code Easy AutoCode, spec #61, 2026-07-06) → **Unity game PLAYABLE** ✓ (2026-07-13)  
+**Tech Stack:** Unity Personal Edition (the playable game) + **MontyGame.Core** — an engine-agnostic .NET 8 class library (see `Docs/adr/0001-engine-agnostic-core-library.md`)  
 **Target:** MVP (World 1 complete) in 8 weeks  
-**Proof it works:** `dotnet test` → 78/78 green · `dotnet run --project src/MontyGame.Cli -- --auto` → full seeded playthrough to victory
+**Proof it works:** `dotnet test` → 78/78 green · `dotnet run --project src/MontyGame.Cli -- --auto` → full seeded playthrough to victory · Unity project opens and plays end-to-end
+
+> ⚠️ **Read `Docs/UNITY_SHELL.md` before touching the Unity project.** Two things surprise
+> everyone: the real project is at `MontyGame-Unity/MontyGame/` (nested one level deeper
+> than expected), and **the Unity build does not consume `MontyGame.Core`** — Unity can't
+> load a .NET 8 / C# 11 assembly, so the rules are re-implemented Unity-side and the board
+> there is 10×10 (100 squares), not the 25-tile World 1. Core stays the tested design
+> reference; the Unity scripts are what actually runs.
 
 ---
 
@@ -21,10 +28,11 @@
 | `Planning/` | Sprint roadmap, task lists, milestones. See `SPRINT_ROADMAP.md` and `TODO.md`. |
 | `Research/` | Reference imagery, mood boards, character art. `/MontyDrawings/` has hand-drawn Dino & Cat. |
 | `codeeasytemplates/` | Code Easy factory templates — see `TEMPLATES_INDEX.md` (every JSON template + how to load) and `processes/WORKSHOP_TO_BUILD_WALKTHROUGH.md` (the end-to-end demo script for this repo's real build) |
-| `Assets/` | (Will be added in the Unity sprint) Unity project folder: `Scenes/`, `Scripts/`, `Sprites/`, `Audio/`, `Prefabs/`. Unity scripts are **thin MonoBehaviour shells that call MontyGame.Core** — no game rules in the shell. |
+| `MontyGame-Unity/MontyGame/` | **The playable game** (Unity 6000.5.2f1). Scripts live directly in `Assets/`; art in `Assets/Resources/`. The whole scene is built in code on Play — no editor setup. See `Docs/UNITY_SHELL.md`. |
 
 ## Key Files & Documents
 
+- `Docs/UNITY_SHELL.md` — **what the playable game actually is**: board, mechanics (coins, diamond, pterodactyls, spaceships, the Hulk), the 7 avatars, procedural audio, script map, and how to batch-compile it
 - `README.md` — public overview
 - `LICENSE` — **All Rights Reserved** (proprietary; owner retains full rights, may commercialize)
 - `PRIVACY.md` — privacy policy (no data collected at ideation stage)
@@ -241,5 +249,5 @@ Email: `gottolovemondays@gmail.com`
 
 ---
 
-**Last Updated:** 2026-07-06  
-**Status:** Planning phase complete. Ready for Sprint 1 development.
+**Last Updated:** 2026-07-13  
+**Status:** Core logic built & tested (78 tests). Unity game playable end-to-end: 10×10 board, 2-player pass-and-play, 7 avatars, coins/diamond, flying hazards, the roaming Hulk, procedural chiptune audio. Next: original art to replace the placeholder avatars, then port the World-1 flavor (25-tile board, story beats) into the Unity build.
