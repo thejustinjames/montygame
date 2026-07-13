@@ -395,11 +395,11 @@ public class GameController : MonoBehaviour
         rolling = true;
         if (first) message = $"{who} is rolling...";
         float rollTime = 2.8f;
-        float cy = Screen.height * 0.42f;
+        float cy = VH * 0.42f;
         dieGroundY = cy;
-        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        float baseSize = Mathf.Min(VW, VH) * 0.28f;
         float margin = baseSize * 0.7f;
-        float L = margin, Rw = Screen.width - margin;
+        float L = margin, Rw = VW - margin;
         float startOff = (float)rng.NextDouble() * (Rw - L);
         float spinDir = rng.Next(0, 2) == 0 ? 1f : -1f;
         float bounces = 4f;
@@ -414,11 +414,11 @@ public class GameController : MonoBehaviour
             float travel = (Rw - L) * 2.6f * ease;
             float pingX = L + Mathf.PingPong(startOff + spinDir * travel, Rw - L);
             float settle = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.78f, 1f, prog));
-            float x = Mathf.Lerp(pingX, Screen.width * 0.5f, settle);
+            float x = Mathf.Lerp(pingX, VW * 0.5f, settle);
 
             float h = Mathf.Abs(Mathf.Sin(prog * Mathf.PI * bounces)) * (1f - prog);
             dieHeight = h;
-            diePos = new Vector2(x, cy - h * Screen.height * 0.22f);
+            diePos = new Vector2(x, cy - h * VH * 0.22f);
             dieScale = 1f + h * 0.30f;
             dieSquash = Mathf.Clamp01(1f - h * 5f) * 0.5f - Mathf.Clamp01(h) * 0.12f;
             dieAngle += spinDir * 1000f * dt * (0.3f + (1f - prog));
@@ -435,7 +435,7 @@ public class GameController : MonoBehaviour
 
         diceFace = roll;
         dieAngle = 0f; dieScale = 1f; dieHeight = 0f; dieSquash = 0f;
-        diePos = new Vector2(Screen.width * 0.5f, cy);
+        diePos = new Vector2(VW * 0.5f, cy);
         yield return new WaitForSeconds(0.9f);
         rolling = false;
     }
@@ -996,8 +996,8 @@ public class GameController : MonoBehaviour
 
     Rect DieRect()
     {
-        float size = Mathf.Min(Screen.width, Screen.height) * 0.28f;
-        float cx = Screen.width * 0.5f, cy = Screen.height * 0.42f;
+        float size = Mathf.Min(VW, VH) * 0.28f;
+        float cx = VW * 0.5f, cy = VH * 0.42f;
         return new Rect(cx - size / 2f, cy - size / 2f, size, size);
     }
 
@@ -1023,7 +1023,7 @@ public class GameController : MonoBehaviour
     void DrawDieShadow()
     {
         if (shadowTex == null) return;
-        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        float baseSize = Mathf.Min(VW, VH) * 0.28f;
         // small & dark when grounded, big & faint when high in the air
         float w = baseSize * Mathf.Lerp(1.05f, 0.55f, dieHeight);
         float hgt = w * 0.30f;
@@ -1038,7 +1038,7 @@ public class GameController : MonoBehaviour
     void DrawPipDie(int face, float angle)
     {
         // draw at the current tumble position/scale, with squash-and-stretch
-        float baseSize = Mathf.Min(Screen.width, Screen.height) * 0.28f;
+        float baseSize = Mathf.Min(VW, VH) * 0.28f;
         float size = baseSize * dieScale;
         float w = size * (1f + 0.30f * dieSquash);   // wider when squashed
         float hgt = size * (1f - 0.30f * dieSquash); // shorter when squashed
@@ -1075,7 +1075,7 @@ public class GameController : MonoBehaviour
         // chained roll -> show the equation "6 + 2 = 8" on a wide plaque
         if (!string.IsNullOrEmpty(popEquation))
         {
-            float w = Screen.width * 0.55f * scale, h = r.height * 1.1f * scale;
+            float w = VW * 0.55f * scale, h = r.height * 1.1f * scale;
             var plaque = new Rect(ctr.x - w / 2f, ctr.y - h / 2f, w, h);
             GUI.Box(plaque, GUIContent.none, boxStyle);
             var st = new GUIStyle(GUI.skin.label)
@@ -1097,9 +1097,28 @@ public class GameController : MonoBehaviour
         }
     }
 
+    // --- UI scaling -------------------------------------------------------
+    // All the IMGUI code below is written in "virtual units" against a 1000-unit
+    // tall design, and GUI.matrix scales that up to real pixels. Without this the
+    // whole HUD is laid out in raw pixels, which is thumb-sized on a laptop but a
+    // speck on a Retina iPad (2000+ px tall).
+    const float DesignHeight = 1000f;
+    float UiScale => Mathf.Clamp(Screen.height / DesignHeight, 0.7f, 3.5f);
+    float VW => Screen.width / UiScale;    // virtual width
+    float VH => Screen.height / UiScale;   // virtual height
+
     void OnGUI()
     {
         EnsureStyles();
+        Matrix4x4 prevMatrix = GUI.matrix;
+        float s = UiScale;
+        GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(s, s, 1f));
+        DrawUI();
+        GUI.matrix = prevMatrix;
+    }
+
+    void DrawUI()
+    {
 
         // modal overlays sit on top of everything, including the setup screens
         if (showCredits) { DrawCredits(); return; }
@@ -1169,7 +1188,7 @@ public class GameController : MonoBehaviour
     {
         var p = players[current];
         float bw = 500f, bh = 82f;
-        var box = new Rect((Screen.width - bw) / 2f, 12f, bw, bh);
+        var box = new Rect((VW - bw) / 2f, 12f, bw, bh);
 
         Color oc = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.6f);
@@ -1194,10 +1213,11 @@ public class GameController : MonoBehaviour
     {
         if (cam == null) return;
         var p = players[current];
-        Vector3 sp = cam.WorldToScreenPoint(p.token.position);
+        Vector3 sp = cam.WorldToScreenPoint(p.token.position);   // real pixels...
         if (sp.z < 0) return;
+        sp /= UiScale;                                           // ...into virtual units
         float bob = Mathf.Sin(Time.time * 4f) * 8f;
-        float gy = Screen.height - sp.y;
+        float gy = VH - sp.y;
 
         // cycle the arrow through the rainbow so it's impossible to miss
         float hue = Mathf.Repeat(Time.time * ArrowHueSpeed, 1f);
@@ -1219,7 +1239,7 @@ public class GameController : MonoBehaviour
     {
         var st = new GUIStyle(GUI.skin.label)
         { fontSize = 72, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        var r = new Rect(0, Screen.height * 0.60f, Screen.width, 110);
+        var r = new Rect(0, VH * 0.60f, VW, 110);
         // drop shadow for readability over the busy board
         st.normal.textColor = new Color(0, 0, 0, 0.7f);
         GUI.Label(new Rect(r.x + 4, r.y + 4, r.width, r.height), bigMsg, st);
@@ -1229,14 +1249,14 @@ public class GameController : MonoBehaviour
 
     void DrawSystemButtons()
     {
-        float w = 150f, h = 44f, m = 15f;
+        float w = 200f, h = 44f, m = 15f;   // wide enough for "HOW TO PLAY" at this font size
         float Row(int i) => m + i * (h + 8f);
-        var newRect = new Rect(Screen.width - w - m, Row(0), w, h);
-        var quitRect = new Rect(Screen.width - w - m, Row(1), w, h);
-        var musicRect = new Rect(Screen.width - w - m, Row(2), w, h);
-        var sfxRect = new Rect(Screen.width - w - m, Row(3), w, h);
-        var rulesRect = new Rect(Screen.width - w - m, Row(4), w, h);
-        var credRect = new Rect(Screen.width - w - m, Row(5), w, h);
+        var newRect = new Rect(VW - w - m, Row(0), w, h);
+        var quitRect = new Rect(VW - w - m, Row(1), w, h);
+        var musicRect = new Rect(VW - w - m, Row(2), w, h);
+        var sfxRect = new Rect(VW - w - m, Row(3), w, h);
+        var rulesRect = new Rect(VW - w - m, Row(4), w, h);
+        var credRect = new Rect(VW - w - m, Row(5), w, h);
 
         if (!confirmingReset && GUI.Button(newRect, "NEW GAME", buttonStyle)) confirmingReset = true;
         if (!confirmingReset && GUI.Button(quitRect, "QUIT", buttonStyle)) QuitGame();
@@ -1285,28 +1305,28 @@ public class GameController : MonoBehaviour
         var title = new GUIStyle(GUI.skin.label)
         { fontSize = 42, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = new Color(1f, 0.85f, 0.2f);
-        GUI.Label(new Rect(0, 24, Screen.width, 56), "HOW TO PLAY", title);
+        GUI.Label(new Rect(0, 24, VW, 56), "HOW TO PLAY", title);
 
         var name = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
         var body = new GUIStyle(GUI.skin.label) { fontSize = 17, wordWrap = true };
         body.normal.textColor = new Color(0.88f, 0.9f, 0.95f);
 
-        float m = Mathf.Max(40f, Screen.width * 0.08f);
+        float m = Mathf.Max(40f, VW * 0.08f);
         float y = 96f;
-        float rowH = Mathf.Max(46f, (Screen.height - 190f) / RuleRows.GetLength(0));
+        float rowH = Mathf.Max(46f, (VH - 190f) / RuleRows.GetLength(0));
         float nameW = 230f;
 
         for (int i = 0; i < RuleRows.GetLength(0); i++)
         {
             name.normal.textColor = TokenColors[i % TokenColors.Length];
             GUI.Label(new Rect(m, y, nameW, rowH), $"{RuleRows[i, 0]}  {RuleRows[i, 1]}", name);
-            GUI.Label(new Rect(m + nameW + 10f, y, Screen.width - m * 2f - nameW - 10f, rowH),
+            GUI.Label(new Rect(m + nameW + 10f, y, VW - m * 2f - nameW - 10f, rowH),
                       RuleRows[i, 2], body);
             y += rowH;
         }
 
         float bw = 220f, bh = 54f;
-        if (GUI.Button(new Rect((Screen.width - bw) / 2f, Screen.height - bh - 22f, bw, bh),
+        if (GUI.Button(new Rect((VW - bw) / 2f, VH - bh - 22f, bw, bh),
                        "GOT IT!  ▶", buttonStyle))
         {
             Sfx.Play("click");
@@ -1331,7 +1351,7 @@ public class GameController : MonoBehaviour
     {
         Color oldc = GUI.color;
         GUI.color = new Color(0.05f, 0.02f, 0.14f, 0.97f);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, 0, VW, VH), Texture2D.whiteTexture);
         GUI.color = oldc;
 
         float t = Time.time - partyStart;
@@ -1345,14 +1365,14 @@ public class GameController : MonoBehaviour
             var st = new GUIStyle(GUI.skin.label)
             { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             float bob = Mathf.Sin(t * 2f + wobble) * 6f;
-            var r = new Rect(0, Screen.height * yFrac + bob, Screen.width, size + 24f);
+            var r = new Rect(0, VH * yFrac + bob, VW, size + 24f);
             st.normal.textColor = new Color(0f, 0f, 0f, 0.55f);
             GUI.Label(new Rect(r.x + 4f, r.y + 5f, r.width, r.height), text, st);
             st.normal.textColor = col;
             GUI.Label(r, text, st);
         }
 
-        float s = Mathf.Min(Screen.width / 1000f, 1.4f);   // scale the words to the window
+        float s = Mathf.Min(VW / 1000f, 1.4f);   // scale the words to the window
         // the birthday line cycles through the party colours
         Color rainbow = Color.HSVToRGB(Mathf.Repeat(t * 0.35f, 1f), 0.75f, 1f);
 
@@ -1363,11 +1383,11 @@ public class GameController : MonoBehaviour
         var sub = new GUIStyle(GUI.skin.label)
         { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Italic };
         sub.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
-        GUI.Label(new Rect(0, Screen.height * 0.76f, Screen.width, 40),
+        GUI.Label(new Rect(0, VH * 0.76f, VW, 40),
                   "Dino and Cat drawn by Monty", sub);
 
         float bw = 220f, bh = 54f;
-        if (GUI.Button(new Rect((Screen.width - bw) / 2f, Screen.height - bh - 22f, bw, bh),
+        if (GUI.Button(new Rect((VW - bw) / 2f, VH - bh - 22f, bw, bh),
                        "BACK  ▶", buttonStyle))
         {
             Sfx.Play("click");
@@ -1384,9 +1404,9 @@ public class GameController : MonoBehaviour
 
         for (int i = 0; i < Count; i++)
         {
-            float x = Hash(i, 1f) * Screen.width;
+            float x = Hash(i, 1f) * VW;
             float speed = 60f + Hash(i, 2f) * 130f;                  // px per second
-            float fall = Mathf.Repeat(t * speed + Hash(i, 3f) * Screen.height, Screen.height + 60f);
+            float fall = Mathf.Repeat(t * speed + Hash(i, 3f) * VH, VH + 60f);
             float y = fall - 30f;
 
             float sway = Mathf.Sin(t * (1.5f + Hash(i, 4f) * 2f) + i) * 26f;
@@ -1411,10 +1431,10 @@ public class GameController : MonoBehaviour
 
         for (int i = 0; i < Count; i++)
         {
-            float x = 40f + Hash(i, 11f) * (Screen.width - 80f);
+            float x = 40f + Hash(i, 11f) * (VW - 80f);
             float speed = 35f + Hash(i, 12f) * 45f;
-            float rise = Mathf.Repeat(t * speed + Hash(i, 13f) * (Screen.height + 260f), Screen.height + 260f);
-            float y = Screen.height + 130f - rise;                   // bottom -> top
+            float rise = Mathf.Repeat(t * speed + Hash(i, 13f) * (VH + 260f), VH + 260f);
+            float y = VH + 130f - rise;                   // bottom -> top
 
             float sway = Mathf.Sin(t * (0.8f + Hash(i, 14f)) + i * 1.7f) * 30f;
             float bw = 58f + Hash(i, 15f) * 34f;
@@ -1464,11 +1484,11 @@ public class GameController : MonoBehaviour
 
         Color oc = GUI.color;
         GUI.color = new Color(0f, 0f, 0f, 0.65f);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, 0, VW, VH), Texture2D.whiteTexture);
         GUI.color = oc;
 
         float w = 470f, h = 220f;
-        var box = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+        var box = new Rect((VW - w) / 2f, (VH - h) / 2f, w, h);
         GUI.Box(box, GUIContent.none, boxStyle);
 
         var t = new GUIStyle(GUI.skin.label)
@@ -1498,7 +1518,7 @@ public class GameController : MonoBehaviour
     {
         Color oldc = GUI.color;
         GUI.color = new Color(0.05f, 0.06f, 0.13f, 0.97f);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, 0, VW, VH), Texture2D.whiteTexture);
         GUI.color = oldc;
     }
 
@@ -1509,7 +1529,7 @@ public class GameController : MonoBehaviour
         var title = new GUIStyle(GUI.skin.label)
         { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = (picking == 0) ? new Color(1f, 0.85f, 0.2f) : new Color(0.3f, 0.85f, 0.9f);
-        GUI.Label(new Rect(0, Screen.height * 0.08f, Screen.width, 50),
+        GUI.Label(new Rect(0, VH * 0.08f, VW, 50),
                   $"Player {picking + 1}: choose your character", title);
 
         var nameStyle = new GUIStyle(GUI.skin.label)
@@ -1520,9 +1540,9 @@ public class GameController : MonoBehaviour
         int count = VisibleAvatars.Length;
         int cols = Mathf.Min(4, count);
         int rows = Mathf.CeilToInt(count / (float)cols);
-        float cell = Mathf.Min(Screen.width / (cols + 1.2f), Screen.height / (rows + 1.4f));
+        float cell = Mathf.Min(VW / (cols + 1.2f), VH / (rows + 1.4f));
         float gap = cell * 0.28f;
-        float y0 = Screen.height * 0.22f;
+        float y0 = VH * 0.22f;
 
         for (int n = 0; n < count; n++)
         {
@@ -1530,7 +1550,7 @@ public class GameController : MonoBehaviour
             int row = n / cols;
             int inRow = Mathf.Min(cols, count - row * cols); // last row may be short — centre it
             float rowW = inRow * cell + (inRow - 1) * gap;
-            float cx = (Screen.width - rowW) / 2f + (n % cols) * (cell + gap);
+            float cx = (VW - rowW) / 2f + (n % cols) * (cell + gap);
             float cy = y0 + row * (cell + gap);
             var r = new Rect(cx, cy, cell, cell);
 
@@ -1566,22 +1586,22 @@ public class GameController : MonoBehaviour
         var title = new GUIStyle(GUI.skin.label)
         { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = Color.white;
-        GUI.Label(new Rect(0, Screen.height * 0.16f, Screen.width, 60), "How many players?", title);
+        GUI.Label(new Rect(0, VH * 0.16f, VW, 60), "How many players?", title);
 
         var sub = new GUIStyle(GUI.skin.label)
         { fontSize = 20, alignment = TextAnchor.MiddleCenter };
         sub.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
-        GUI.Label(new Rect(0, Screen.height * 0.16f + 56, Screen.width, 34),
+        GUI.Label(new Rect(0, VH * 0.16f + 56, VW, 34),
                   "1 player = beat the board on your own", sub);
 
         var numStyle = new GUIStyle(GUI.skin.button)
         { fontSize = 54, fontStyle = FontStyle.Bold };
 
-        float cell = Mathf.Min(Screen.width / 8f, Screen.height / 4.5f);
+        float cell = Mathf.Min(VW / 8f, VH / 4.5f);
         float gap = cell * 0.25f;
         float totalW = MaxPlayers * cell + (MaxPlayers - 1) * gap;
-        float x0 = (Screen.width - totalW) / 2f;
-        float y = Screen.height * 0.42f;
+        float x0 = (VW - totalW) / 2f;
+        float y = VH * 0.42f;
 
         for (int n = 1; n <= MaxPlayers; n++)
         {
