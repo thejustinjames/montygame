@@ -23,6 +23,26 @@ Editing a sibling `MontyGame-Unity/Assets/` does nothing; that folder was delete
     -batchmode -quit -nographics -projectPath MontyGame-Unity/MontyGame -logFile /tmp/unity.log
   grep -c "error CS" /tmp/unity.log   # must be 0
   ```
+  ⚠️ **This silently does nothing while the Unity Editor is open** — the editor holds the
+  project lock, so the run aborts after a few lines and `grep -c "error CS"` cheerfully
+  reports 0 having compiled nothing. Always confirm the log actually contains a
+  `Csc Library/...Assembly-CSharp.dll` line before believing it.
+
+- Compile check that works **with the editor open** (drives Roslyn from the .NET SDK against
+  Unity's own assemblies — Unity's bundled `csc` shim is broken, its shebang points at a
+  build-farm path). Build a response file so the reference list survives the shell:
+  ```bash
+  U=/Applications/Unity/Hub/Editor/6000.5.2f1/Unity.app/Contents/Resources/Scripting
+  { echo "-target:library"; echo "-nologo"; echo "-noconfig"; echo "-nostdlib+"; echo "-langversion:9"
+    echo "-out:/tmp/check.dll"
+    find "$U/UnityReferenceAssemblies/unity-4.8-api" -maxdepth 2 -name "*.dll" | sed 's/^/-r:/'
+    find "$U/Managed/UnityEngine" -name "*.dll" | sed 's/^/-r:/'
+    ls Assets/*.cs
+  } > /tmp/build.rsp
+  dotnet ~/.dotnet/sdk/*/Roslyn/bincore/csc.dll @/tmp/build.rsp | grep "error CS"
+  ```
+  (`-maxdepth 2` matters: the `Facades/netstandard.dll` one level down is required, and
+  without it you get ~100 bogus CS0012 errors that look like real breakage.)
 
 ## Two hard facts about the architecture
 
@@ -55,47 +75,64 @@ rows alternate direction, 100 top-left. Win by reaching **100**.
 - **Boss:** square 100, which is also the win.
 
 ### Turn loop (`GameController.cs`)
-Two-player pass-and-play. Press **ROLL** → animated tumbling die → walk square by
-square → land → effects apply. Camera zooms in on the active player and pulls back
-between turns.
+**1–6 players**, pass-and-play. The first screen asks how many are playing (1 = beat the
+board solo), then each player picks a character in turn — no two can take the same one.
+Press **ROLL** → animated tumbling die → walk square by square → land → effects apply.
+Camera zooms in on the active player and pulls back between turns.
+
+Tokens sit in a 3×2 arrangement within a square so six can share one without hiding each
+other; each player has a colour used for their token, their HUD row, the turn banner and
+the ROLL button. `MaxPlayers`, `TokenOffsets` and `TokenColors` on `GameController` are the
+single source of truth — `GameBootstrap` spawns one token per possible player from them.
 
 - **Roll again on a 6**, and the rolls are *summed* — the game shows the equation
   ("6 + 2 = 8"), which is deliberate counting practice. Capped at 4 chained rolls.
 - Effects (ladder/snake/coin) apply **only on the square you land on**, never in passing.
 
 ### Hazards, bonuses, and the Hulk
-- **Pterodactyls** (2, roaming): touch one and you're dragged back to square 10 —
-  **unless you hold a coin or diamond**, which is consumed as a shield instead.
-- **Spaceships** (2, roaming): touch one and you're beamed up to square 90.
+- **Pterodactyls** (2, roaming): touch one and you're dragged back to square 10 — but
+  **only once per player per game** (`Player.pteroUsed`). After that he swoops and misses.
+  A coin or diamond shields you instead, and being shielded does *not* use up your one grab.
+- **Spaceships** (2, roaming): touch one and you're beamed up to square 90 — but **only if
+  you're behind 90**. Already past it? The ship flies by and nothing happens (it must never
+  drag a leader backwards).
 - **Diamond:** a bonus that re-spawns a few squares *ahead* of the current player every
   ~3 rolls, so there's always something to chase. Shields like a coin.
-- **The HULK** (added 2026-07-13): a third mover who plays **in reverse**.
+- **The HULK** (added 2026-07-13): an extra mover who hunts the players.
   - Drops in at square **100** (~35% chance on any turn he's off the board), with a roar.
-  - Each turn he rolls 1–6 and stomps that many squares **down** the board, flashing a
-    warning ("HULK MOVES 4!") before he moves.
-  - He roams at most **20 squares** — he never goes below square **80**. A roll that would
-    take him past it means he gets bored and leaves the board (he can drop in again later).
-    So he is effectively a **guardian of the run-up to the goal**.
+  - Each turn he **rolls the die himself — tinted green** — then stomps that many squares
+    **toward the nearest player**, up or down the board (`NearestPlayer()`), flashing a
+    warning ("HULK MOVES 4!") first. Because the board is boustrophedon, that reads on
+    screen as him prowling left and right along the rows.
+  - He prowls the top of the board only: **never below square 80** (20 squares of range).
+    A roll that would carry him past either end means he gets bored and leaves (he can drop
+    in again later). So he's a **guardian of the run-up to the goal**.
   - **If he lands on a player's square, that player is thrown back to square 50** with a
-    roar and a smash. Note: it only triggers on *his* landing — a player landing on *his*
-    square is safe, and coins do **not** shield against him.
+    roar and a smash. It only triggers on *his* landing — a player landing on *his* square
+    is safe, and coins do **not** shield against him.
 
 ### Characters / avatars
-Character-select gallery on start; each player picks (player 2 can't take player 1's pick).
-Seven avatars, sprites in `Assets/Resources/avatar_1..7.png`:
+Character-select gallery after the player count; each player picks in turn, and an avatar
+someone already took shows as **TAKEN**. Six on offer, sprites in `Assets/Resources/`:
 
-| # | Name | Source |
+| Slot | Name | Source |
 | --- | --- | --- |
-| 1 | Dino | the kid's hand drawing (`Research/MontyDrawings/`) |
-| 2 | Cat | the kid's hand drawing |
+| 1 | Cat | the kid's hand drawing (`Research/MontyDrawings/`) |
+| 2 | *(retired)* | an earlier drawing of the same cat — still on disk, **not offered** |
 | 3 | Rex | pink boombox T-rex (`Research/trex_getoblaster.jpeg`) |
 | 4 | Robo | retro tin robot (`Research/robot1.jpeg`) |
 | 5 | Saucer | flying saucer (`Research/ufo.jpg`) |
 | 6 | Goldbot | gold protocol droid (`Research/c3po.jpeg`) |
 | 7 | Bleep | blue/white astromech (`Research/r2d2.jpeg`) |
 
-The gallery grid sizes itself from `AvatarCount` (max 4 per row, short last row centered),
-so adding an 8th avatar is just a PNG in `Resources/` plus a name in `AvatarNames`.
+`VisibleAvatars` controls which slots the gallery offers, so retiring or restoring one is a
+one-line change; the grid sizes itself from that list (max 4 per row, short last row centred).
+
+> **Watch the EXIF.** The kid's drawings are phone photos, and slot 1 carried an
+> `Orientation: LeftBottom` tag: Preview and macOS honoured it and showed the cat upright,
+> but **Unity ignores EXIF and renders the raw pixels**, so in-game she lay on her side. The
+> fix is to bake the rotation into the pixels and drop the tag —
+> `magick in.png -auto-orient -strip out.png`. Do this to any new photo-sourced sprite.
 
 > ⚠️ **These are placeholders, not shippable art.** Goldbot, Bleep, and the Hulk are
 > recognizable trademarked characters and the T-rex/saucer are someone else's copyrighted
