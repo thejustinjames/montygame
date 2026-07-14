@@ -46,18 +46,30 @@ public static class IosBuild
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
         PlayerSettings.SetArchitecture(NamedBuildTarget.iOS, 1);  // ARM64
 
+        // The ENTIRE UI of this game is IMGUI (OnGUI). Engine-code stripping decides the
+        // IMGUI module isn't needed and strips it, so on device GUI.skin comes back null
+        // and EnsureStyles() throws on every frame — a game with no buttons at all. The
+        // editor never strips, so this is invisible until you run on the iPad.
+        PlayerSettings.stripEngineCode = false;
+        PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.iOS, ManagedStrippingLevel.Minimal);
+
         // The project's only scene, and it's essentially empty: GameBootstrap builds
         // the whole game in code on Play. The scene just has to BE in the build —
         // the project's own build-settings list is empty, hence naming it here.
         var scenes = new[] { "Assets/TestLevel_5Tiles.unity" };
+
+        // -devBuild on the command line => development player: managed stack traces on
+        // device (release IL2CPP strips them, leaving a bare "NullReferenceException").
+        bool dev = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-devBuild") >= 0;
 
         var opts = new BuildPlayerOptions
         {
             scenes = scenes,
             locationPathName = OutDir,
             target = BuildTarget.iOS,
-            options = BuildOptions.None,
+            options = dev ? (BuildOptions.Development | BuildOptions.AllowDebugging) : BuildOptions.None,
         };
+        Debug.Log(dev ? "Building DEVELOPMENT player" : "Building release player");
 
         BuildReport report = BuildPipeline.BuildPlayer(opts);
         if (report.summary.result == BuildResult.Succeeded)

@@ -127,6 +127,10 @@ single source of truth — `GameBootstrap` spawns one token per possible player 
     happens to land on during the climb, down where the players actually are.
 
 ### Screens
+- **WIN CELEBRATION** — reaching 100 takes over the screen: "CONGRATULATIONS YOU WON!" in
+  cycling rainbow, "HAPPY BIRTHDAY TOBIAS (MONTY)", "LOVE DADDY xx", the winner's character
+  bouncing in triumph, **three Hulks dancing** along the bottom, confetti, balloons, and a
+  victory fanfare (`Sfx.Build("fanfare")` — rising arpeggio, held chord, sparkles).
 - **HOW TO PLAY** — a table of every piece and what it does. The text lives in `RuleRows` in
   `GameController.cs`, deliberately next to the code implementing it, so the rules screen
   can't quietly drift out of sync with the actual rules. **Update it when you change a rule.**
@@ -189,3 +193,29 @@ script, render a WAV, and `afplay` it — that's how the roar was tuned.
 | `PlayerController.cs` | Leftover platformer move/jump from the 5-tile test. **Unused by the board game.** |
 
 All UI is **IMGUI (`OnGUI`)** — deliberately, so there's no canvas to wire up in the editor.
+
+---
+
+## The UI is drawn in virtual units, not pixels
+
+Every `OnGUI` coordinate in `GameController` is a **virtual unit** against a 1000-unit-tall
+design (`DesignHeight`); `OnGUI` sets a `GUI.matrix` scale and calls `DrawUI()`. Without
+this the HUD is laid out in raw pixels — fine on a laptop, a speck on a Retina iPad.
+
+Two consequences to respect when editing UI code:
+
+1. **Use `VW`/`VH`, never `Screen.width`/`Screen.height`,** inside drawing code. `Screen.*`
+   is real pixels; mixing the two silently puts things in the wrong place.
+2. **Never call `GUIUtility.RotateAroundPivot` once the matrix carries a scale.** It applies
+   the rotation in scaled screen space but takes the pivot in the coordinates you give it,
+   so the thing rotates around a point far from itself — it *orbits* instead of spinning.
+   This is exactly what made the die "swirl" on the iPad while looking perfect on the Mac.
+   Use `SetRotatedMatrix(angle, pivotVirtual)`, which composes the matrix explicitly.
+
+Anything converting world→screen (`cam.WorldToScreenPoint`) returns **real pixels** and must
+be divided by `UiScale` before being used as a GUI coordinate — see `DrawTurnArrow()`.
+
+## It runs on the iPad
+
+Shipped and playing on an iPad Pro. Build + install: **`Docs/IPAD_DEPLOY.md`** — read the
+trap table there before touching the iOS build, it cost a day's worth of confusing bugs.

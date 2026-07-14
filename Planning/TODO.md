@@ -27,6 +27,16 @@ not to the letter* — don't work through them item by item; reconcile them agai
 - [x] Procedural audio: 1980s-arcade chiptune loop + all SFX synthesized in code; Music/SFX toggles
 - [x] Cinematic camera (zooms to the active player, pulls back between turns)
 
+### Shipped to the iPad ✓ (2026-07-14)
+Installed and playing on "JJ iPad Pro" as a native app. See `Docs/IPAD_DEPLOY.md`.
+
+- [x] Unity iOS module + Xcode iOS SDK, signing with a free Apple ID (expires every 7 days)
+- [x] `Assets/Editor/IosBuild.cs` — scripted iPad build (landscape both ways, fullscreen, IL2CPP)
+- [x] Resolution-scaled IMGUI so the HUD is finger-sized on a Retina screen
+- [x] iOS audio session set to `Playback` so sound isn't killed by the mute switch
+- [x] Rubies, both robbing Hulks, HOW TO PLAY + CREDITS screens, birthday win celebration
+- [ ] **App icon** — it installs with Unity's default grey logo. Monty's Cat drawing?
+
 ### Next on the Unity build
 - [ ] **Replace the placeholder avatars with original art** — Goldbot/Bleep/Hulk are trademarked characters and the Rex/Saucer images are someone else's copyright. Blocking for any release.
 - [ ] Decide the board question: keep the 100-square board, or port the 25-tile World 1 (`Docs/WORLD_1_LAYOUT.md`) into Unity

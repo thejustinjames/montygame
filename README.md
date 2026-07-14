@@ -5,11 +5,14 @@ board crossed with arcade hazards, built for (and with) a kid whose own drawings
 
 ## Status
 
-**Playable.** Open `MontyGame-Unity/MontyGame/` in Unity and press Play: a 10×10 board,
-two-player pass-and-play, seven pickable characters, coins and a diamond to chase,
-pterodactyls and spaceships that swoop in, a Hulk who stomps *down* the board from square
-100, and a procedural chiptune soundtrack. The game rules are also modelled separately as a
-tested .NET library (78 passing tests).
+**Built, and playing on a real iPad.** A 10×10 board for 1–6 players, six pickable
+characters, coins, rubies and a roving diamond to chase, pterodactyls and spaceships that
+swoop in, a Hulk who prowls the top of the board hunting whoever is closest, a procedural
+chiptune soundtrack, and a birthday celebration when somebody wins. The game rules are also
+modelled separately as a tested .NET library (78 passing tests).
+
+Open `MontyGame-Unity/MontyGame/` in Unity and press Play, or see `Docs/IPAD_DEPLOY.md` to
+put it on an iPad.
 
 ## Repository structure
 
@@ -26,6 +29,7 @@ tested .NET library (78 passing tests).
 ## Where to start reading
 
 - `Docs/UNITY_SHELL.md` — what the playable game actually is, and how to run it
+- `Docs/IPAD_DEPLOY.md` — building and installing it on an iPad
 - `Docs/GAME_DESIGN_IDEATION.md` — the design: concept, mechanics, learning goals, story
 - `Docs/WORLD_1_LAYOUT.md` — the intended 25-tile World 1 board
 - `Planning/SPRINT_ROADMAP.md` — the plan to MVP

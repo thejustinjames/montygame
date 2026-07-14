@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 /// <summary>
 /// Tiny procedural sound-effects engine — generates simple tones/sweeps in code
@@ -16,9 +17,25 @@ public static class Sfx
     public static bool FxOn = true;
     public static bool MusicOn = true;
 
+#if UNITY_IOS && !UNITY_EDITOR
+    // See Assets/Plugins/iOS/MontyAudioSession.mm — without this, iOS silences the
+    // whole game when the iPad is muted in Control Center.
+    [DllImport("__Internal")]
+    private static extern void MontyConfigureAudioSession();
+#endif
+
+    static void ConfigureIosAudio()
+    {
+#if UNITY_IOS && !UNITY_EDITOR
+        try { MontyConfigureAudioSession(); }
+        catch (System.Exception e) { Debug.LogWarning("iOS audio session: " + e.Message); }
+#endif
+    }
+
     static void Ensure()
     {
         if (src != null) return;
+        ConfigureIosAudio();
         var go = new GameObject("_Sfx");
         Object.DontDestroyOnLoad(go);
         src = go.AddComponent<AudioSource>();
@@ -269,6 +286,23 @@ public static class Sfx
                 Roar(b, 1.1f);
                 Tone(b, 0f, 0.45f, 220, 55, 0.5f, true);
                 NoiseTick(b, 0.18f, 0.35f);
+                break;
+            case "fanfare":         // somebody won the whole game — the big one
+                b = Buf(3.2f);
+                // triumphant rising arpeggio, each note doubled an octave up
+                float[] tune = { 523, 659, 784, 1047, 784, 1047, 1319, 1568 };
+                for (int k = 0; k < tune.Length; k++)
+                {
+                    float at = k * 0.16f;
+                    Tone(b, at, 0.30f, tune[k], tune[k], 0.28f, true);
+                    Tone(b, at, 0.30f, tune[k] * 2f, tune[k] * 2f, 0.12f, true);
+                }
+                // then a big held chord to sit under the cheering
+                float[] chord = { 523, 659, 784, 1047 };
+                foreach (float f0 in chord) Tone(b, 1.35f, 1.5f, f0, f0, 0.16f, false);
+                // sparkles on top
+                for (int k = 0; k < 10; k++)
+                    Tone(b, 1.5f + k * 0.15f, 0.12f, 1800f + k * 180f, 2600f + k * 180f, 0.10f, true);
                 break;
             case "win":
                 b = Buf(0.7f);

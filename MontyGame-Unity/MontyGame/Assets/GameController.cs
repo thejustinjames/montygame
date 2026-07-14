@@ -94,7 +94,9 @@ public class GameController : MonoBehaviour
     private bool showRules = false;       // HOW TO PLAY overlay
     private bool showCredits = false;     // CREDITS overlay (balloons + ticker tape)
     private float partyStart = 0f;        // when the credits opened, so the party starts fresh
+    private float winStart = 0f;          // when the game was won, so the party starts fresh
     private Texture2D balloonTex;
+    private Texture2D hulkDanceTex;
     private int picking = 0;            // which player is currently choosing
     private int[] chosen;               // avatar index each player picked (-1 = not yet)
     private const int AvatarCount = 7;
@@ -543,8 +545,9 @@ public class GameController : MonoBehaviour
             yield return new WaitForSeconds(0.9f);
             won = true;
             winner = current;
+            winStart = Time.time;
             message = $"🏆 {p.name} WINS with {p.stars} coins! 🏆";
-            Sfx.Play("win", 0.8f);
+            Sfx.Play("fanfare", 0.9f);
             zoomed = false; // pull back to celebrate on the full board
             busy = false;
             yield break;
@@ -944,16 +947,22 @@ public class GameController : MonoBehaviour
         if (carrier != null) Destroy(carrier);
     }
 
+    // GUI.skin is null in a player if the IMGUI module gets stripped (see IosBuild.cs).
+    // Never dereference it directly: one NRE in here means the game draws NO ui at all.
+    static GUIStyle SkinLabel => GUI.skin != null ? GUI.skin.label : new GUIStyle();
+    static GUIStyle SkinButton => GUI.skin != null ? GUI.skin.button : new GUIStyle();
+    static GUIStyle SkinBox => GUI.skin != null ? GUI.skin.box : new GUIStyle();
+
     void EnsureStyles()
     {
         if (labelStyle != null) return;
-        labelStyle = new GUIStyle(GUI.skin.label) { fontSize = 19, fontStyle = FontStyle.Bold };
+        labelStyle = new GUIStyle(SkinLabel) { fontSize = 19, fontStyle = FontStyle.Bold };
         labelStyle.normal.textColor = Color.white;
-        turnStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
-        bigStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold };
+        turnStyle = new GUIStyle(SkinLabel) { fontSize = 22, fontStyle = FontStyle.Bold };
+        bigStyle = new GUIStyle(SkinLabel) { fontSize = 24, fontStyle = FontStyle.Bold };
         bigStyle.normal.textColor = new Color(1f, 0.9f, 0.3f);
-        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
-        boxStyle = new GUIStyle(GUI.skin.box);
+        buttonStyle = new GUIStyle(SkinButton) { fontSize = 22, fontStyle = FontStyle.Bold };
+        boxStyle = new GUIStyle(SkinBox);
         var tex = new Texture2D(1, 1);
         tex.SetPixel(0, 0, new Color(0, 0, 0, 0.6f));
         tex.Apply();
@@ -963,9 +972,9 @@ public class GameController : MonoBehaviour
         dieBodyTex = new Texture2D(1, 1);
         dieBodyTex.SetPixel(0, 0, new Color(0.98f, 0.98f, 0.95f, 1f));
         dieBodyTex.Apply();
-        dieBodyStyle = new GUIStyle(GUI.skin.box);
+        dieBodyStyle = new GUIStyle(SkinBox);
         dieBodyStyle.normal.background = dieBodyTex;
-        dieNumStyle = new GUIStyle(GUI.skin.label)
+        dieNumStyle = new GUIStyle(SkinLabel)
         { fontSize = 150, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         dieNumStyle.normal.textColor = new Color(0.15f, 0.15f, 0.2f);
 
@@ -1049,7 +1058,7 @@ public class GameController : MonoBehaviour
         Color oldBg = GUI.backgroundColor;
         GUI.color = dieTint;             // green while the HULK is rolling
         GUI.backgroundColor = dieTint;
-        GUIUtility.RotateAroundPivot(angle, r.center);
+        SetRotatedMatrix(angle, r.center);
         if (tex != null)
         {
             GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, true);
@@ -1078,7 +1087,7 @@ public class GameController : MonoBehaviour
             float w = VW * 0.55f * scale, h = r.height * 1.1f * scale;
             var plaque = new Rect(ctr.x - w / 2f, ctr.y - h / 2f, w, h);
             GUI.Box(plaque, GUIContent.none, boxStyle);
-            var st = new GUIStyle(GUI.skin.label)
+            var st = new GUIStyle(SkinLabel)
             { fontSize = 70, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             st.normal.textColor = Color.white;
             GUI.Label(plaque, popEquation, st);
@@ -1107,6 +1116,24 @@ public class GameController : MonoBehaviour
     float VW => Screen.width / UiScale;    // virtual width
     float VH => Screen.height / UiScale;   // virtual height
 
+    // Rotate about a pivot given in VIRTUAL units, on top of the UI scale.
+    //
+    // GUIUtility.RotateAroundPivot can't be used once GUI.matrix carries a scale:
+    // it applies the rotation in scaled screen space but takes the pivot in the
+    // coordinates you hand it, so the die ends up spinning around a point far from
+    // itself — it orbits instead of tumbling. (Invisible at scale 1 on a laptop,
+    // very visible at ~1.7 on an iPad.) Composing the matrix explicitly is exact:
+    // virtual -> scale -> rotate about the pivot's real screen position.
+    void SetRotatedMatrix(float angle, Vector2 pivotVirtual)
+    {
+        float s = UiScale;
+        Vector3 p = pivotVirtual * s;                      // pivot in real screen pixels
+        Matrix4x4 scale = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(s, s, 1f));
+        Matrix4x4 rot = Matrix4x4.TRS(p, Quaternion.Euler(0f, 0f, angle), Vector3.one)
+                      * Matrix4x4.TRS(-p, Quaternion.identity, Vector3.one);
+        GUI.matrix = rot * scale;
+    }
+
     void OnGUI()
     {
         EnsureStyles();
@@ -1127,6 +1154,7 @@ public class GameController : MonoBehaviour
         if (choosingCount) { DrawPlayerCount(); DrawSystemButtons(); return; }
         if (players == null) return;
         if (selecting) { DrawGallery(); DrawSystemButtons(); return; }
+        if (won) { DrawWinCelebration(); DrawSystemButtons(); return; }
 
         // the status panel grows with the number of players
         const float rowH = 28f;
@@ -1201,7 +1229,7 @@ public class GameController : MonoBehaviour
         var av = CurrentAvatar();
         if (av != null) GUI.DrawTexture(new Rect(box.x + 12, box.y + 9, 64, 64), av, ScaleMode.ScaleToFit, true);
 
-        var st = new GUIStyle(GUI.skin.label)
+        var st = new GUIStyle(SkinLabel)
         { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
         st.normal.textColor = p.color;
         GUI.Label(new Rect(box.x + 88, box.y, bw - 96, bh), $"{p.name.ToUpper()}'S TURN", st);
@@ -1223,7 +1251,7 @@ public class GameController : MonoBehaviour
         float hue = Mathf.Repeat(Time.time * ArrowHueSpeed, 1f);
         Color rainbow = Color.HSVToRGB(hue, 0.85f, 1f);
 
-        var st = new GUIStyle(GUI.skin.label)
+        var st = new GUIStyle(SkinLabel)
         { fontSize = 46, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         var r = new Rect(sp.x - 34f, gy - 96f - bob, 68f, 52f);
 
@@ -1237,7 +1265,7 @@ public class GameController : MonoBehaviour
 
     void DrawBigMsg()
     {
-        var st = new GUIStyle(GUI.skin.label)
+        var st = new GUIStyle(SkinLabel)
         { fontSize = 72, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         var r = new Rect(0, VH * 0.60f, VW, 110);
         // drop shadow for readability over the busy board
@@ -1302,13 +1330,13 @@ public class GameController : MonoBehaviour
     {
         DrawSetupBackdrop();
 
-        var title = new GUIStyle(GUI.skin.label)
+        var title = new GUIStyle(SkinLabel)
         { fontSize = 42, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = new Color(1f, 0.85f, 0.2f);
         GUI.Label(new Rect(0, 24, VW, 56), "HOW TO PLAY", title);
 
-        var name = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
-        var body = new GUIStyle(GUI.skin.label) { fontSize = 17, wordWrap = true };
+        var name = new GUIStyle(SkinLabel) { fontSize = 20, fontStyle = FontStyle.Bold };
+        var body = new GUIStyle(SkinLabel) { fontSize = 17, wordWrap = true };
         body.normal.textColor = new Color(0.88f, 0.9f, 0.95f);
 
         float m = Mathf.Max(40f, VW * 0.08f);
@@ -1332,6 +1360,98 @@ public class GameController : MonoBehaviour
             Sfx.Play("click");
             showRules = false;
         }
+    }
+
+    // --------------------------------------------------------------- YOU WON!!!
+
+    void DrawWinCelebration()
+    {
+        float t = Time.time - winStart;
+
+        Color oldc = GUI.color;
+        GUI.color = new Color(0.04f, 0.02f, 0.12f, 0.93f);
+        GUI.DrawTexture(new Rect(0, 0, VW, VH), Texture2D.whiteTexture);
+        GUI.color = oldc;
+
+        DrawTickerTape(t);      // confetti everywhere
+        DrawDancingHulks(t);    // ...and the Hulk having the time of his life
+        DrawBalloons(t * 0.7f);
+
+        void Big(string text, float yFrac, int size, Color col, float wobble)
+        {
+            var st = new GUIStyle(SkinLabel)
+            { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            float bob = Mathf.Sin(t * 2.4f + wobble) * 7f;
+            var r = new Rect(0, VH * yFrac + bob, VW, size + 26f);
+            st.normal.textColor = new Color(0f, 0f, 0f, 0.6f);
+            GUI.Label(new Rect(r.x + 4f, r.y + 5f, r.width, r.height), text, st);
+            st.normal.textColor = col;
+            GUI.Label(r, text, st);
+        }
+
+        float s = Mathf.Min(VW / 1100f, 1.3f);
+        Color rainbow = Color.HSVToRGB(Mathf.Repeat(t * 0.4f, 1f), 0.8f, 1f);
+
+        // who actually won
+        string who = (winner >= 0 && players != null && winner < players.Length)
+                     ? players[winner].name.ToUpper() : "";
+        var av = (winner >= 0 && chosen != null && winner < chosen.Length) ? avatarTex[chosen[winner]] : null;
+        if (av != null)
+        {
+            float aw = 150f * s;
+            // the winner's character bounces up and down in triumph
+            float hop = Mathf.Abs(Mathf.Sin(t * 4f)) * 22f;
+            GUI.DrawTexture(new Rect((VW - aw) / 2f, VH * 0.035f - hop, aw, aw),
+                            av, ScaleMode.ScaleToFit, true);
+        }
+
+        Big("CONGRATULATIONS YOU WON!", 0.26f, Mathf.RoundToInt(58 * s), rainbow, 0f);
+        if (!string.IsNullOrEmpty(who))
+            Big($"{who} IS THE CHAMPION", 0.40f, Mathf.RoundToInt(30 * s),
+                new Color(1f, 1f, 1f, 0.9f), 0.6f);
+        Big("HAPPY BIRTHDAY TOBIAS (MONTY)", 0.52f, Mathf.RoundToInt(52 * s),
+            new Color(1f, 0.85f, 0.25f), 1.2f);
+        Big("LOVE DADDY xx", 0.67f, Mathf.RoundToInt(46 * s),
+            new Color(1f, 0.45f, 0.65f), 2.1f);
+
+        float bw = 260f, bh = 60f;
+        if (GUI.Button(new Rect((VW - bw) / 2f, VH - bh - 24f, bw, bh), "PLAY AGAIN  ▶", buttonStyle))
+        {
+            Sfx.Play("click");
+            ResetGame();
+        }
+    }
+
+    // The Hulk dances along the bottom: bouncing, squashing, spinning side to side.
+    void DrawDancingHulks(float t)
+    {
+        if (hulkDanceTex == null) hulkDanceTex = Resources.Load<Texture2D>("ladder_hulk");
+        if (hulkDanceTex == null) return;
+
+        const int Count = 3;
+        Matrix4x4 oldm = GUI.matrix;
+        Color oldc = GUI.color;
+
+        for (int i = 0; i < Count; i++)
+        {
+            float phase = i * 2.1f;
+            float baseW = VH * 0.30f;
+            float bounce = Mathf.Abs(Mathf.Sin(t * 3.2f + phase));   // he jumps
+            float squash = 1f - 0.12f * (1f - bounce);               // and lands heavy
+
+            float w = baseW * (1f + 0.06f * Mathf.Sin(t * 3.2f + phase));
+            float h = w * squash;
+            float x = VW * (0.18f + 0.32f * i) - w / 2f + Mathf.Sin(t * 1.6f + phase) * 26f;
+            float y = VH * 0.86f - h - bounce * VH * 0.10f;
+
+            var r = new Rect(x, y, w, h);
+            float tilt = Mathf.Sin(t * 3.2f + phase) * 13f;   // rocking side to side
+            SetRotatedMatrix(tilt, r.center);
+            GUI.color = Color.white;
+            GUI.DrawTexture(r, hulkDanceTex, ScaleMode.ScaleToFit, true);
+            GUI.matrix = oldm;
+        }
+        GUI.color = oldc;
     }
 
     // ------------------------------------------------------------------- CREDITS
@@ -1362,7 +1482,7 @@ public class GameController : MonoBehaviour
         // the words, big — with a soft drop shadow so they sit over the party
         void Big(string text, float yFrac, int size, Color col, float wobble)
         {
-            var st = new GUIStyle(GUI.skin.label)
+            var st = new GUIStyle(SkinLabel)
             { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             float bob = Mathf.Sin(t * 2f + wobble) * 6f;
             var r = new Rect(0, VH * yFrac + bob, VW, size + 24f);
@@ -1380,7 +1500,7 @@ public class GameController : MonoBehaviour
         Big("FOR MONTY", 0.36f, Mathf.RoundToInt(86 * s), new Color(1f, 0.85f, 0.25f), 1.1f);
         Big("HAPPY 5th BIRTHDAY!", 0.58f, Mathf.RoundToInt(72 * s), rainbow, 2.2f);
 
-        var sub = new GUIStyle(GUI.skin.label)
+        var sub = new GUIStyle(SkinLabel)
         { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Italic };
         sub.normal.textColor = new Color(1f, 1f, 1f, 0.85f);
         GUI.Label(new Rect(0, VH * 0.76f, VW, 40),
@@ -1415,7 +1535,7 @@ public class GameController : MonoBehaviour
             var r = new Rect(x + sway, y, w, h);
 
             GUI.color = PartyColors[i % PartyColors.Length];
-            GUIUtility.RotateAroundPivot((t * (90f + Hash(i, 7f) * 260f)) % 360f, r.center);
+            SetRotatedMatrix((t * (90f + Hash(i, 7f) * 260f)) % 360f, r.center);
             GUI.DrawTexture(r, Texture2D.whiteTexture);
             GUI.matrix = oldm;
         }
@@ -1491,7 +1611,7 @@ public class GameController : MonoBehaviour
         var box = new Rect((VW - w) / 2f, (VH - h) / 2f, w, h);
         GUI.Box(box, GUIContent.none, boxStyle);
 
-        var t = new GUIStyle(GUI.skin.label)
+        var t = new GUIStyle(SkinLabel)
         { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         t.normal.textColor = Color.white;
         GUI.Label(new Rect(box.x, box.y + 30, w, 40), "Start a new game?", t);
@@ -1526,13 +1646,13 @@ public class GameController : MonoBehaviour
     {
         DrawSetupBackdrop();
 
-        var title = new GUIStyle(GUI.skin.label)
+        var title = new GUIStyle(SkinLabel)
         { fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = (picking == 0) ? new Color(1f, 0.85f, 0.2f) : new Color(0.3f, 0.85f, 0.9f);
         GUI.Label(new Rect(0, VH * 0.08f, VW, 50),
                   $"Player {picking + 1}: choose your character", title);
 
-        var nameStyle = new GUIStyle(GUI.skin.label)
+        var nameStyle = new GUIStyle(SkinLabel)
         { fontSize = 18, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         nameStyle.normal.textColor = Color.white;
 
@@ -1583,18 +1703,18 @@ public class GameController : MonoBehaviour
     {
         DrawSetupBackdrop();
 
-        var title = new GUIStyle(GUI.skin.label)
+        var title = new GUIStyle(SkinLabel)
         { fontSize = 40, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         title.normal.textColor = Color.white;
         GUI.Label(new Rect(0, VH * 0.16f, VW, 60), "How many players?", title);
 
-        var sub = new GUIStyle(GUI.skin.label)
+        var sub = new GUIStyle(SkinLabel)
         { fontSize = 20, alignment = TextAnchor.MiddleCenter };
         sub.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
         GUI.Label(new Rect(0, VH * 0.16f + 56, VW, 34),
                   "1 player = beat the board on your own", sub);
 
-        var numStyle = new GUIStyle(GUI.skin.button)
+        var numStyle = new GUIStyle(SkinButton)
         { fontSize = 54, fontStyle = FontStyle.Bold };
 
         float cell = Mathf.Min(VW / 8f, VH / 4.5f);

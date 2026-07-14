@@ -2,7 +2,7 @@
 
 **MontyGame** is a **game development project** for ages 5–7: a platformer-board hybrid blending Snakes & Ladders mechanics with Donkey Kong platforming, set in a colorful space-dinosaur adventure.
 
-**Status:** Planning ✓ → **World 1 game logic BUILT & TESTED** ✓ (Code Easy AutoCode, spec #61, 2026-07-06) → **Unity game PLAYABLE** ✓ (2026-07-13)  
+**Status:** Planning ✓ → **World 1 game logic BUILT & TESTED** ✓ (Code Easy AutoCode, spec #61, 2026-07-06) → **Unity game PLAYABLE** ✓ (2026-07-13) → **SHIPPED TO THE iPAD** ✓ (2026-07-14, playing on JJ iPad Pro)  
 **Tech Stack:** Unity Personal Edition (the playable game) + **MontyGame.Core** — an engine-agnostic .NET 8 class library (see `Docs/adr/0001-engine-agnostic-core-library.md`)  
 **Target:** MVP (World 1 complete) in 8 weeks  
 **Proof it works:** `dotnet test` → 78/78 green · `dotnet run --project src/MontyGame.Cli -- --auto` → full seeded playthrough to victory · Unity project opens and plays end-to-end
@@ -32,7 +32,8 @@
 
 ## Key Files & Documents
 
-- `Docs/UNITY_SHELL.md` — **what the playable game actually is**: board, mechanics (coins, diamond, pterodactyls, spaceships, the Hulk), the 7 avatars, procedural audio, script map, and how to batch-compile it
+- `Docs/UNITY_SHELL.md` — **what the playable game actually is**: board, mechanics (coins, rubies, diamond, pterodactyls, spaceships, the Hulk), the avatars, procedural audio, the win celebration, script map, and how to batch-compile it
+- `Docs/IPAD_DEPLOY.md` — **building and installing on the iPad**, plus the trap table. Two things there will save you a day: **▶ in Xcode does NOT pick up C# changes** (re-run the Unity build first), and **engine-code stripping deletes the IMGUI module**, which silently removes the entire UI on device
 - `README.md` — public overview
 - `LICENSE` — **All Rights Reserved** (proprietary; owner retains full rights, may commercialize)
 - `PRIVACY.md` — privacy policy (no data collected at ideation stage)
@@ -249,5 +250,5 @@ Email: `gottolovemondays@gmail.com`
 
 ---
 
-**Last Updated:** 2026-07-13  
-**Status:** Core logic built & tested (78 tests). Unity game playable end-to-end: 10×10 board, 2-player pass-and-play, 7 avatars, coins/diamond, flying hazards, the roaming Hulk, procedural chiptune audio. Next: original art to replace the placeholder avatars, then port the World-1 flavor (25-tile board, story beats) into the Unity build.
+**Last Updated:** 2026-07-14  
+**Status:** **Shipped to Monty's iPad and playing.** Core logic built & tested (78 tests). Unity game complete end-to-end: 10×10 board, 1–6 players, avatar select, coins/rubies/diamond, flying hazards, the roaming Hulk, How-to-Play + Credits screens, birthday win celebration, procedural chiptune audio. Next: an app icon (Monty's own drawing?), original art to replace the placeholder avatars, then the World-1 flavor (25-tile board, story beats).
